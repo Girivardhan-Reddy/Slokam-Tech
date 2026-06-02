@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="theme-color" content="#030712">
+    <title>Demo Portal | Slokam Technology</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-deep:#030712;--bg-primary:#050a14;--bg-secondary:#080f1f;--bg-card:#0b1324;
+            --bg-card-hover:#0f1a30;--sidebar-bg:#040912;--border-subtle:rgba(255,255,255,0.04);
+            --border-medium:rgba(255,255,255,0.07);--accent:#6366f1;--accent-glow:#818cf8;
+            --accent-secondary:#a855f7;--accent-tertiary:#06b6d4;--gold:#f59e0b;--gold-glow:#fbbf24;
+            --white:#fff;--text-primary:#e2e8f0;--text-secondary:#94a3b8;--text-muted:#64748b;
+            --success:#10b981;--success-glow:#34d399;--error:#ef4444;--error-glow:#f87171;
+            --warning:#f59e0b;--info:#3b82f6;--radius-sm:10px;--radius:14px;--radius-lg:20px;
+            --radius-xl:28px;--radius-full:9999px;--shadow-glow:0 0 60px rgba(99,102,241,0.1);
+            --shadow-card:0 1px 3px rgba(0,0,0,0.5),0 4px 20px rgba(0,0,0,0.3);
+            --shadow-lg:0 20px 60px rgba(0,0,0,0.5);--transition-fast:0.15s ease;
+            --transition:0.3s cubic-bezier(0.16,1,0.3,1);--transition-bounce:0.5s cubic-bezier(0.34,1.56,0.64,1);
+            --font-sans:'Inter',sans-serif;--font-display:'Outfit',sans-serif;--font-mono:'Space Grotesk',monospace;
+            --sidebar-width:250px;--topbar-height:60px;
+        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-primary);display:flex;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+        ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:10px}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.12)}
+        .ambient-bg{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden}
+        .ambient-orb{position:absolute;border-radius:50%;filter:blur(140px);opacity:0.15;animation:ambFloat 14s ease-in-out infinite}
+        .ambient-orb-1{width:500px;height:500px;background:var(--accent-tertiary);top:-15%;right:-10%;animation-delay:0s}
+        .ambient-orb-2{width:400px;height:400px;background:var(--accent);bottom:-20%;left:-8%;animation-delay:-6s}
+        .ambient-orb-3{width:350px;height:350px;background:var(--accent-secondary);top:60%;left:40%;animation-delay:-10s;opacity:0.1}
+        @keyframes ambFloat{0%,100%{transform:translate(0,0)scale(1)}33%{transform:translate(50px,-40px)scale(1.12)}66%{transform:translate(-30px,25px)scale(0.88)}}
+        
+        .sidebar{width:var(--sidebar-width);height:100vh;position:fixed;top:0;left:0;background:var(--sidebar-bg);border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;z-index:1000;transition:transform var(--transition);overflow-y:auto;overflow-x:hidden}
+        .sidebar-header{padding:18px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-subtle)}
+        .sidebar-logo-img{width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0}
+        .sidebar-logo{width:34px;height:34px;background:linear-gradient(135deg,var(--accent-tertiary),#0891b2);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:none;align-items:center;justify-content:center;font-size:14px;color:var(--white);flex-shrink:0}
+        .sidebar-brand{font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--white);white-space:nowrap}
+        .sidebar-user{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-subtle)}
+        .sidebar-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--accent-tertiary),var(--accent-secondary));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:var(--white);flex-shrink:0}
+        .sidebar-user-info{overflow:hidden}.sidebar-user-info .name{font-weight:600;font-size:12px;color:var(--white)}.sidebar-user-info .id{font-size:10px;color:var(--text-muted)}
+        .sidebar-nav{flex:1;padding:8px;display:flex;flex-direction:column;gap:1px}
+        .sidebar-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);color:var(--text-secondary);text-decoration:none;font-weight:500;font-size:12px;transition:var(--transition-fast);white-space:nowrap}
+        .sidebar-nav a:hover{background:rgba(255,255,255,0.03);color:var(--white)}
+        .sidebar-nav a.active{background:rgba(6,182,212,0.12);color:var(--accent-tertiary);font-weight:600}
+        .sidebar-nav a i{width:18px;text-align:center;font-size:14px;flex-shrink:0}
+        .sidebar-footer{padding:8px;border-top:1px solid var(--border-subtle)}
+        .sidebar-footer a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);color:var(--error-glow);text-decoration:none;font-weight:500;font-size:12px;transition:var(--transition-fast)}
+        .sidebar-footer a:hover{background:rgba(239,68,68,0.1)}
+        
+        .main-content{margin-left:var(--sidebar-width);flex:1;min-height:100vh;display:flex;flex-direction:column;position:relative;z-index:1}
+        .topbar{height:var(--topbar-height);background:rgba(8,15,31,0.85);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:999;gap:14px}
+        .topbar-left{display:flex;align-items:center;gap:12px}
+        .hamburger{display:none;background:none;border:none;color:var(--white);font-size:20px;cursor:pointer;padding:5px;border-radius:var(--radius-sm)}
+        .hamburger:hover{background:rgba(255,255,255,0.05)}
+        .topbar-title{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--white)}
+        .demo-badge{background:linear-gradient(135deg,var(--accent-tertiary),#0891b2);color:white;padding:4px 12px;border-radius:var(--radius-full);font-size:10px;font-weight:700;display:flex;align-items:center;gap:5px;animation:demoPulse 2s ease-in-out infinite}
+        @keyframes demoPulse{0%,100%{box-shadow:0 0 0 0 rgba(6,182,212,0.4)}50%{box-shadow:0 0 0 10px rgba(6,182,212,0)}}
+        .btn{padding:8px 16px;border-radius:var(--radius-full);font-weight:600;font-size:11px;cursor:pointer;border:none;transition:var(--transition-fast);font-family:var(--font-sans);display:inline-flex;align-items:center;gap:5px;text-decoration:none;white-space:nowrap}
+        .btn-primary{background:linear-gradient(135deg,var(--accent-tertiary),#0891b2);color:white}
+        .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(6,182,212,0.3)}
+        .btn-outline{background:transparent;border:1px solid var(--border-medium);color:var(--text-primary)}
+        .btn-outline:hover{border-color:var(--accent-tertiary);color:var(--accent-tertiary)}
+        .btn-sm{padding:5px 10px;font-size:10px}
+        .topbar-right{display:flex;align-items:center;gap:10px}
+        
+        .page-content{padding:20px;flex:1;display:flex;flex-direction:column;gap:20px}
+        .flash-container{position:fixed;top:70px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:360px}
+        .flash-message{padding:12px 16px;border-radius:var(--radius);font-weight:500;font-size:11px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(30px);animation:flashIn 0.4s ease,flashOut 0.4s ease 3.6s forwards;box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,0.08)}
+        .flash-message.success{background:rgba(16,185,129,0.18);color:var(--success-glow);border-color:rgba(16,185,129,0.25)}
+        .flash-message.info{background:rgba(6,182,212,0.18);color:var(--accent-tertiary);border-color:rgba(6,182,212,0.25)}
+        .flash-message.error{background:rgba(239,68,68,0.18);color:var(--error-glow);border-color:rgba(239,68,68,0.25)}
+        @keyframes flashIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+        @keyframes flashOut{from{transform:translateX(0);opacity:1}to{transform:translateX(120%);opacity:0}}
+        
+        .section-content{display:none;animation:fadeUp 0.4s ease}.section-content.active{display:block}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+        .stat-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);padding:18px;transition:var(--transition)}
+        .stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-glow)}
+        .stat-icon{width:36px;height:36px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:10px}
+        .icon-cyan{background:rgba(6,182,212,0.12);color:var(--accent-tertiary)}
+        .icon-indigo{background:rgba(99,102,241,0.12);color:var(--accent-glow)}
+        .icon-emerald{background:rgba(16,185,129,0.12);color:var(--success-glow)}
+        .icon-amber{background:rgba(245,158,11,0.12);color:var(--gold-glow)}
+        .stat-value{font-family:var(--font-display);font-size:24px;font-weight:700;color:var(--white)}
+        .stat-label{font-size:10px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:0.8px}
+        
+        .section-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:20px}
+        .section-header{padding:14px 18px;border-bottom:1px solid var(--border-subtle);font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--white);display:flex;align-items:center;justify-content:space-between}
+        .section-body{padding:14px 18px}
+        
+        .empty-state{text-align:center;padding:40px 20px;color:var(--text-secondary)}
+        .empty-state .empty-icon{font-size:40px;margin-bottom:10px;opacity:0.4}
+        
+        .folder-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+        .folder-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:var(--radius);padding:18px 14px;cursor:pointer;transition:var(--transition);text-align:center}
+        .folder-card:hover{background:rgba(255,255,255,0.04);border-color:var(--accent-tertiary);transform:translateY(-2px);box-shadow:var(--shadow-glow)}
+        .folder-card .folder-icon{font-size:28px;color:var(--accent-tertiary);margin-bottom:8px}
+        .folder-card h4{font-size:12px;color:var(--white);margin-bottom:2px}
+        .folder-card span{font-size:10px;color:var(--text-muted)}
+        
+        /* Video Grid for Demo */
+        .videos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+        .video-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;transition:var(--transition);position:relative}
+        .video-card:hover{transform:translateY(-4px);border-color:var(--accent-tertiary);box-shadow:var(--shadow-glow)}
+        .video-thumb{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden}
+        .video-thumb iframe{width:100%;height:100%;border:none;pointer-events:none;transform:scale(1.05)}
+        .video-thumb .play-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;opacity:0;transition:var(--transition-fast)}
+        .video-card:hover .video-thumb .play-overlay{opacity:1}
+        .video-thumb .play-overlay i{font-size:48px;color:white;text-shadow:0 2px 10px rgba(0,0,0,0.5)}
+        .video-info{padding:14px}
+        .video-info h4{font-size:14px;font-weight:600;color:var(--white);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .video-info .video-meta{display:flex;gap:12px;font-size:10px;color:var(--text-muted);margin-bottom:4px}
+        .video-info .video-date{font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;margin-bottom:8px}
+        .video-resources{display:flex;gap:6px;flex-wrap:wrap}
+        .link-download{padding:4px 10px;border-radius:var(--radius-full);font-size:10px;font-weight:600;text-decoration:none;transition:var(--transition-fast)}
+        .link-notes{background:rgba(16,185,129,0.12);color:var(--success-glow)}.link-notes:hover{background:rgba(16,185,129,0.25)}
+        .link-exercise{background:rgba(245,158,11,0.12);color:var(--gold-glow)}.link-exercise:hover{background:rgba(245,158,11,0.25)}
+        .link-practice{background:rgba(6,182,212,0.12);color:var(--accent-tertiary)}.link-practice:hover{background:rgba(6,182,212,0.25)}
+        
+        /* YouTube Style Video Player */
+        .video-player-page{position:fixed;top:0;left:0;width:100%;height:100%;z-index:20000;background:var(--bg-deep);display:none;flex-direction:column}
+        .video-player-page.active{display:flex}
+        .vp-topbar{height:56px;background:var(--bg-secondary);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0}
+        .vp-back{background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:8px 12px;border-radius:var(--radius-sm);transition:var(--transition-fast);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500}
+        .vp-back:hover{background:rgba(255,255,255,0.05);color:var(--white)}
+        .vp-title{font-family:var(--font-display);font-weight:600;font-size:16px;color:var(--white);text-align:center;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 16px}
+        .vp-search{background:rgba(255,255,255,0.05);border:1px solid var(--border-medium);border-radius:var(--radius-full);padding:6px 14px;display:flex;align-items:center;gap:8px;width:280px}
+        .vp-search i{color:var(--text-muted);font-size:13px}
+        .vp-search input{background:none;border:none;color:var(--white);font-size:13px;outline:none;width:100%;font-family:var(--font-sans)}
+        .vp-search input::placeholder{color:var(--text-muted)}
+        .vp-body{flex:1;display:flex;overflow:hidden}
+        .vp-main{flex:1;display:flex;flex-direction:column;overflow-y:auto;min-width:0;padding:24px 32px}
+        .vp-video-container{max-width:1000px;width:100%;margin:0 auto}
+        .vp-video-wrapper{position:relative;width:100%;padding-bottom:56.25%;background:#000;border-radius:var(--radius-lg);overflow:hidden}
+        .vp-video-wrapper iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+        .vp-video-info{margin-top:20px}
+        .vp-video-title{font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--white);margin-bottom:8px}
+        .vp-video-meta{display:flex;gap:16px;font-size:12px;color:var(--text-muted);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border-subtle)}
+        .vp-description-section{background:rgba(255,255,255,0.02);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px}
+        .vp-description-section h4{font-size:13px;font-weight:600;color:var(--white);margin-bottom:8px}
+        .vp-description-section p{font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap}
+        .vp-resources-section{background:rgba(255,255,255,0.02);border-radius:var(--radius-lg);padding:20px}
+        .vp-resources-section h4{font-size:13px;font-weight:600;color:var(--white);margin-bottom:12px}
+        .resources-grid{display:flex;gap:12px;flex-wrap:wrap}
+        .resource-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius);padding:10px 16px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:var(--transition-fast);text-decoration:none}
+        .resource-card:hover{border-color:var(--accent-glow);transform:translateY(-2px);background:rgba(99,102,241,0.05)}
+        .resource-card i{font-size:16px}
+        .resource-card.notes i{color:var(--success-glow)}
+        .resource-card.exercise i{color:var(--gold-glow)}
+        .resource-card.practice i{color:var(--accent-glow)}
+        .resource-card span{font-size:11px;font-weight:500;color:var(--white)}
+        .vp-sidebar{width:380px;background:var(--bg-secondary);border-left:1px solid var(--border-subtle);display:flex;flex-direction:column;flex-shrink:0}
+        .vp-sidebar-header{padding:16px 20px;border-bottom:1px solid var(--border-subtle)}
+        .vp-sidebar-header h3{font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--white);display:flex;align-items:center;gap:8px}
+        .vp-sidebar-header h3 i{color:var(--accent-glow)}
+        .vp-playlist{flex:1;overflow-y:auto}
+        .vp-playlist-item{display:flex;gap:12px;padding:12px 16px;cursor:pointer;transition:var(--transition-fast);border-bottom:1px solid rgba(255,255,255,0.03)}
+        .vp-playlist-item:hover{background:rgba(255,255,255,0.03)}
+        .vp-playlist-item.active{background:rgba(99,102,241,0.1);border-left:3px solid var(--accent-glow)}
+        .playlist-thumb{width:120px;height:68px;border-radius:var(--radius-sm);background:#000;overflow:hidden;position:relative;flex-shrink:0}
+        .playlist-thumb iframe{width:100%;height:100%;border:none;pointer-events:none;transform:scale(1.1)}
+        .playlist-info{flex:1;min-width:0}
+        .playlist-title{font-size:13px;font-weight:600;color:var(--white);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .playlist-folder{font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;margin-bottom:2px}
+        .playlist-date{font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:4px}
+        
+        .announcement-item{padding:12px 0;border-bottom:1px solid var(--border-subtle)}
+        .announcement-item:last-child{border-bottom:none}
+        .announcement-item h4{color:var(--white);font-size:13px;margin-bottom:4px}
+        .announcement-item p{color:var(--text-secondary);font-size:11px;line-height:1.5}
+        
+        .sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:999}.sidebar-overlay.active{display:block}
+        
+        @media(max-width:1024px){.sidebar{transform:translateX(-100%)}.sidebar.mobile-open{transform:translateX(0)}.main-content{margin-left:0}.hamburger{display:block}.vp-body{flex-direction:column}.vp-sidebar{width:100%;max-height:300px;border-left:none;border-top:1px solid var(--border-subtle)}.vp-main{padding:16px}.vp-search{display:none}}
+        @media(max-width:768px){.page-content{padding:12px}.topbar{padding:0 12px}.stats-grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}.folder-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}.videos-grid{grid-template-columns:1fr}}
+        @media(max-width:480px){.stats-grid{grid-template-columns:1fr 1fr}.stat-card{padding:14px}.vp-topbar{padding:0 12px}.vp-back span{display:none}}
+    </style>
+</head>
+<body>
+<div class="ambient-bg">
+    <div class="ambient-orb ambient-orb-1"></div>
+    <div class="ambient-orb ambient-orb-2"></div>
+    <div class="ambient-orb ambient-orb-3"></div>
+</div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <img src="https://play-lh.googleusercontent.com/_kvdk0-jX5RDlc9eW903Vx59JepDDr0skF693OEugwIHvEggcKZBPwIxjNKm576rbQ=w240-h480-rw" alt="Slokam Logo" class="sidebar-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="sidebar-logo" style="display:none"><i class="fas fa-infinity"></i></div>
+        <span class="sidebar-brand">Slokam Technology</span>
+    </div>
+    <div class="sidebar-user">
+        <div class="sidebar-avatar"><i class="fas fa-user-astronaut"></i></div>
+        <div class="sidebar-user-info">
+            <div class="name">{{ student.fullname }}</div>
+            <div class="id">{{ student.student_id }} · Demo</div>
+        </div>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="#" class="active" onclick="switchSection('dashboard')" data-section="dashboard"><i class="fas fa-th-large"></i> Dashboard</a>
+        <a href="#" onclick="switchSection('folders')" data-section="folders"><i class="fas fa-folder"></i> Folders</a>
+        <a href="#" onclick="switchSection('videos')" data-section="videos"><i class="fas fa-video"></i> All Videos</a>
+        <a href="#" onclick="switchSection('announcements')" data-section="announcements"><i class="fas fa-bullhorn"></i> Announcements</a>
+    </nav>
+    <div class="sidebar-footer"><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Exit Demo</a></div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+    <header class="topbar">
+        <div class="topbar-left">
+            <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <span class="topbar-title" id="topbarTitle">Demo Dashboard</span>
+            <span class="demo-badge"><i class="fas fa-play-circle"></i> DEMO MODE</span>
+        </div>
+        <div class="topbar-right">
+            <a href="{{ url_for('index') }}" class="btn btn-primary btn-sm"><i class="fas fa-rocket"></i> Register</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline btn-sm"><i class="fas fa-sign-out-alt"></i> Exit</a>
+        </div>
+    </header>
+
+    <div class="flash-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message {{ category }}">
+                        {% if category == 'success' %}<i class="fas fa-circle-check"></i>
+                        {% elif category == 'error' %}<i class="fas fa-circle-exclamation"></i>
+                        {% else %}<i class="fas fa-circle-info"></i>{% endif %}
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <div class="page-content">
+        <!-- DASHBOARD -->
+        <div class="section-content active" id="section-dashboard">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-icon icon-cyan"><i class="fas fa-id-card"></i></div><div class="stat-value" style="font-size:13px">{{ student.student_id }}</div><div class="stat-label">Demo ID</div></div>
+                <div class="stat-card"><div class="stat-icon icon-indigo"><i class="fas fa-user"></i></div><div class="stat-value" style="font-size:14px">{{ student.fullname }}</div><div class="stat-label">Name</div></div>
+                <div class="stat-card"><div class="stat-icon icon-emerald"><i class="fas fa-layer-group"></i></div><div class="stat-value" style="font-size:13px">{{ student.batch }}</div><div class="stat-label">Access Level</div></div>
+                <div class="stat-card"><div class="stat-icon icon-amber"><i class="fas fa-video"></i></div><div class="stat-value">{{ videos|length if videos else 0 }}</div><div class="stat-label">Demo Videos</div></div>
+            </div>
+
+            <div class="section-card">
+                <div class="section-header"><span><i class="fas fa-folder"></i> Available Folders</span><a href="#" onclick="switchSection('folders')" style="color:var(--accent-tertiary);font-size:11px;text-decoration:none">View All <i class="fas fa-arrow-right"></i></a></div>
+                <div class="section-body">
+                    {% if folders and folders|length > 0 %}
+                        <div class="folder-grid">
+                            {% for folder in folders[:6] %}
+                                <div class="folder-card" onclick="openFolderVideos('{{ folder.id }}','{{ folder.folder_name }}')">
+                                    <div class="folder-icon"><i class="fas fa-folder-open"></i></div>
+                                    <h4>{{ folder.folder_name }}</h4>
+                                    <span>Click to view</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state"><div class="empty-icon"><i class="fas fa-folder-open"></i></div><p>No demo folders available.</p></div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="section-card">
+                <div class="section-header"><span><i class="fas fa-bullhorn"></i> Announcements</span></div>
+                <div class="section-body">
+                    {% if announcements and announcements|length > 0 %}
+                        {% for ann in announcements[:3] %}
+                            <div class="announcement-item"><h4>{{ ann.title }}</h4><p>{{ ann.message }}</p></div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state"><p>No announcements.</p></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- FOLDERS -->
+        <div class="section-content" id="section-folders">
+            <div class="section-card">
+                <div class="section-header"><span><i class="fas fa-folder"></i> All Folders</span></div>
+                <div class="section-body">
+                    {% if folders and folders|length > 0 %}
+                        <div class="folder-grid">
+                            {% for folder in folders %}
+                                <div class="folder-card" onclick="openFolderVideos('{{ folder.id }}','{{ folder.folder_name }}')">
+                                    <div class="folder-icon"><i class="fas fa-folder-open"></i></div>
+                                    <h4>{{ folder.folder_name }}</h4>
+                                    <span>Click to view</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state"><div class="empty-icon"><i class="fas fa-folder-open"></i></div><p>No folders available in demo.</p></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- FOLDER VIDEOS -->
+        <div class="section-content" id="section-folder-videos">
+            <div class="section-card">
+                <div class="section-header"><span><i class="fas fa-folder"></i> <span id="folderVideoTitle">Folder Videos</span></span><button class="btn btn-outline btn-sm" onclick="switchSection('folders')"><i class="fas fa-arrow-left"></i> Back</button></div>
+                <div class="section-body" id="folderVideoList"><div class="empty-state"><p>Select a folder.</p></div></div>
+            </div>
+        </div>
+
+        <!-- ALL VIDEOS -->
+        <div class="section-content" id="section-videos">
+            <div class="section-card">
+                <div class="section-header"><span><i class="fas fa-video"></i> All Demo Videos</span></div>
+                <div class="section-body">
+                    {% if videos and videos|length > 0 %}
+                        <div class="videos-grid" id="allVideosGrid">
+                            {% for video in videos %}
+                                <div class="video-card" onclick='openVideoPlayer("{{ video.youtube_link }}","{{ video.title|e }}","{{ video.folder_name|e }}","{{ video.description|default('')|e }}","{{ video.notes_file|default('') }}","{{ video.exercise_file|default('') }}","{{ video.practice_file|default('') }}","{{ video.video_date|default('') }}")'>
+                                    <div class="video-thumb">
+                                        {% set yt_link = video.youtube_link or '' %}
+                                        {% if yt_link %}
+                                            {% if 'youtu.be/' in yt_link %}
+                                                {% set vid = yt_link.split('youtu.be/')[-1].split('?')[0].split('&')[0] %}
+                                            {% elif 'watch?v=' in yt_link %}
+                                                {% set vid = yt_link.split('watch?v=')[-1].split('&')[0] %}
+                                            {% elif 'embed/' in yt_link %}
+                                                {% set vid = yt_link.split('embed/')[-1].split('?')[0] %}
+                                            {% else %}
+                                                {% set vid = '' %}
+                                            {% endif %}
+                                            {% if vid %}<iframe src="https://www.youtube.com/embed/{{ vid }}?controls=0&modestbranding=1"></iframe>{% endif %}
+                                        {% endif %}
+                                        <div class="play-overlay"><i class="fas fa-play-circle"></i></div>
+                                    </div>
+                                    <div class="video-info">
+                                        <h4>{{ video.title }}</h4>
+                                        <div class="video-meta"><span><i class="fas fa-folder"></i> {{ video.folder_name }}</span></div>
+                                        <div class="video-date"><i class="fas fa-calendar-alt"></i> {{ video.video_date or 'No date' }}</div>
+                                        <div class="video-resources">
+                                            {% if video.notes_file %}<a href="{{ video.notes_file }}" target="_blank" class="link-download link-notes" onclick="event.stopPropagation()"><i class="fas fa-file-alt"></i> Notes</a>{% endif %}
+                                            {% if video.exercise_file %}<a href="{{ video.exercise_file }}" target="_blank" class="link-download link-exercise" onclick="event.stopPropagation()"><i class="fas fa-tasks"></i> Exercise</a>{% endif %}
+                                            {% if video.practice_file %}<a href="{{ video.practice_file }}" target="_blank" class="link-download link-practice" onclick="event.stopPropagation()"><i class="fas fa-code"></i> Practice</a>{% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state"><div class="empty-icon"><i class="fas fa-video"></i></div><p>No demo videos available yet.</p></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ANNOUNCEMENTS -->
+        <div class="section-content" id="section-announcements">
+            <div class="section-card">
+                <div class="section-header"><span><i class="fas fa-bullhorn"></i> All Announcements</span></div>
+                <div class="section-body">
+                    {% if announcements and announcements|length > 0 %}
+                        {% for ann in announcements %}
+                            <div class="announcement-item"><h4>{{ ann.title }}</h4><p>{{ ann.message }}</p></div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state"><p>No announcements.</p></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- YOUTUBE STYLE VIDEO PLAYER -->
+<div class="video-player-page" id="videoPlayerPage">
+    <div class="vp-topbar">
+        <button class="vp-back" onclick="closeVideoPlayer()"><i class="fas fa-arrow-left"></i> <span>Back</span></button>
+        <span class="vp-title" id="vpPlayerTitle">Video Player</span>
+        <div class="vp-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="vpSearchInput" placeholder="Search in playlist..." onkeyup="filterPlaylist()">
+        </div>
+    </div>
+    <div class="vp-body">
+        <div class="vp-main">
+            <div class="vp-video-container">
+                <div class="vp-video-wrapper">
+                    <iframe id="vpPlayerIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+                </div>
+                <div class="vp-video-info">
+                    <h2 class="vp-video-title" id="vpPlayerVideoTitle">Select a video to play</h2>
+                    <div class="vp-video-meta">
+                        <span><i class="fas fa-folder"></i> <span id="vpPlayerFolder">-</span></span>
+                        <span><i class="fas fa-calendar-alt"></i> <span id="vpPlayerDate">-</span></span>
+                    </div>
+                </div>
+                <div class="vp-description-section">
+                    <h4><i class="fas fa-align-left"></i> Description</h4>
+                    <p id="vpPlayerDesc">No description available.</p>
+                </div>
+                <div class="vp-resources-section">
+                    <h4><i class="fas fa-download"></i> Resources & Downloads</h4>
+                    <div class="resources-grid" id="vpPlayerResources"></div>
+                </div>
+            </div>
+        </div>
+        <div class="vp-sidebar">
+            <div class="vp-sidebar-header">
+                <h3><i class="fas fa-list"></i> Playlist <span id="playlistCount"></span></h3>
+            </div>
+            <div class="vp-playlist" id="vpPlaylist"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global variables
+let allDemoVideos = [];
+let currentPlaylist = [];
+let currentVideoIndex = 0;
+
+// Store all demo videos
+allDemoVideos = {% if videos %}{{ videos|tojson|safe }}{% else %}[]{% endif %};
+console.log("Demo videos loaded:", allDemoVideos.length);
+
+// Tab switching
+function switchSection(section) {
+    document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('section-' + section);
+    if (el) el.classList.add('active');
+    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+    const link = document.querySelector(`.sidebar-nav a[data-section="${section}"]`);
+    if (link) link.classList.add('active');
+    const titles = {
+        dashboard: 'Demo Dashboard',
+        folders: 'Folders',
+        videos: 'All Videos',
+        'folder-videos': 'Folder Videos',
+        announcements: 'Announcements'
+    };
+    document.getElementById('topbarTitle').textContent = titles[section] || 'Demo Portal';
+    closeSidebar();
+}
+
+// Sidebar functions
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('mobile-open');
+    document.getElementById('sidebarOverlay').classList.toggle('active');
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('mobile-open');
+    document.getElementById('sidebarOverlay').classList.remove('active');
+}
+
+// YouTube functions
+function getYouTubeId(url) {
+    if (!url) return '';
+    if (url.includes('youtu.be/')) return url.split('youtu.be/')[1].split(/[?&#]/)[0];
+    if (url.includes('watch?v=')) return url.split('watch?v=')[1].split('&')[0];
+    if (url.includes('embed/')) return url.split('embed/')[1].split(/[?&#]/)[0];
+    if (url.includes('shorts/')) return url.split('shorts/')[1].split(/[?&#]/)[0];
+    return '';
+}
+
+function getYouTubeEmbed(url) {
+    const id = getYouTubeId(url);
+    return id ? 'https://www.youtube.com/embed/' + id + '?rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=1&cc_load_policy=1' : '';
+}
+
+// Escape HTML
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+// Open folder videos
+function openFolderVideos(folderId, folderName) {
+    document.getElementById('folderVideoTitle').innerHTML = `${folderName} <span style="background:rgba(6,182,212,0.15); padding:4px 12px; border-radius:20px; font-size:11px; margin-left:10px;"><i class="fas fa-video"></i> ${allDemoVideos.filter(v => v.folder_id === folderId).length} Videos</span>`;
+    const videoList = document.getElementById('folderVideoList');
+    const folderVideos = allDemoVideos.filter(v => v.folder_id === folderId);
+    
+    if (folderVideos.length > 0) {
+        videoList.innerHTML = `<div class="videos-grid">${folderVideos.map(v => {
+            const ytId = getYouTubeId(v.youtube_link || '');
+            const thumbHtml = ytId ? `<iframe src="https://www.youtube.com/embed/${ytId}?controls=0&modestbranding=1"></iframe>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)"><i class="fas fa-play"></i></div>';
+            return `<div class="video-card" onclick='openVideoPlayer("${escapeHtml(v.youtube_link)}","${escapeHtml(v.title)}","${escapeHtml(v.folder_name)}","${escapeHtml(v.description||'')}","${escapeHtml(v.notes_file||'')}","${escapeHtml(v.exercise_file||'')}","${escapeHtml(v.practice_file||'')}","${v.video_date||''}")'>
+                <div class="video-thumb">${thumbHtml}<div class="play-overlay"><i class="fas fa-play-circle"></i></div></div>
+                <div class="video-info">
+                    <h4>${escapeHtml(v.title)}</h4>
+                    <div class="video-meta"><span><i class="fas fa-folder"></i> ${escapeHtml(v.folder_name)}</span></div>
+                    <div class="video-date"><i class="fas fa-calendar-alt"></i> ${v.video_date || 'No date'}</div>
+                    <div class="video-resources">
+                        ${v.notes_file ? `<a href="${escapeHtml(v.notes_file)}" target="_blank" class="link-download link-notes" onclick="event.stopPropagation()"><i class="fas fa-file-alt"></i> Notes</a>` : ''}
+                        ${v.exercise_file ? `<a href="${escapeHtml(v.exercise_file)}" target="_blank" class="link-download link-exercise" onclick="event.stopPropagation()"><i class="fas fa-tasks"></i> Exercise</a>` : ''}
+                        ${v.practice_file ? `<a href="${escapeHtml(v.practice_file)}" target="_blank" class="link-download link-practice" onclick="event.stopPropagation()"><i class="fas fa-code"></i> Practice</a>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }).join('')}</div>`;
+    } else {
+        videoList.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fas fa-video"></i></div><p>No videos in this folder.</p></div>';
+    }
+    switchSection('folder-videos');
+}
+
+// Open video player
+function openVideoPlayer(link, title, folder, desc, notes, exercises, practice, videoDate) {
+    // Set playlist based on folder or all videos
+    if (folder) {
+        currentPlaylist = allDemoVideos.filter(v => v.folder_name === folder);
+    } else {
+        currentPlaylist = allDemoVideos;
+    }
+    
+    currentVideoIndex = currentPlaylist.findIndex(v => v.youtube_link === link);
+    if (currentVideoIndex < 0) currentVideoIndex = 0;
+    
+    playVideoAtIndex(currentVideoIndex);
+    
+    document.getElementById('videoPlayerPage').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function playVideoAtIndex(index) {
+    if (index < 0 || index >= currentPlaylist.length) return;
+    currentVideoIndex = index;
+    const video = currentPlaylist[index];
+    
+    document.getElementById('vpPlayerIframe').src = getYouTubeEmbed(video.youtube_link || '');
+    document.getElementById('vpPlayerTitle').textContent = video.title;
+    document.getElementById('vpPlayerVideoTitle').textContent = video.title;
+    document.getElementById('vpPlayerFolder').textContent = video.folder_name || 'Demo';
+    document.getElementById('vpPlayerDate').textContent = video.video_date || 'No date';
+    document.getElementById('vpPlayerDesc').textContent = video.description || 'No description available.';
+    
+    // Render resources
+    const resourcesDiv = document.getElementById('vpPlayerResources');
+    let hasResources = false;
+    let resourcesHtml = '';
+    if (video.notes_file && video.notes_file !== '') {
+        resourcesHtml += `<div class="resource-card notes" onclick="window.open('${escapeHtml(video.notes_file)}','_blank')"><i class="fas fa-file-alt"></i><span>Notes</span></div>`;
+        hasResources = true;
+    }
+    if (video.exercise_file && video.exercise_file !== '') {
+        resourcesHtml += `<div class="resource-card exercise" onclick="window.open('${escapeHtml(video.exercise_file)}','_blank')"><i class="fas fa-tasks"></i><span>Exercises</span></div>`;
+        hasResources = true;
+    }
+    if (video.practice_file && video.practice_file !== '') {
+        resourcesHtml += `<div class="resource-card practice" onclick="window.open('${escapeHtml(video.practice_file)}','_blank')"><i class="fas fa-code"></i><span>Practice Problems</span></div>`;
+        hasResources = true;
+    }
+    resourcesDiv.innerHTML = hasResources ? resourcesHtml : '<p style="color:var(--text-muted);font-size:12px">No resources available for this demo video.</p>';
+    
+    renderPlaylist();
+}
+
+function renderPlaylist() {
+    const pl = document.getElementById('vpPlaylist');
+    document.getElementById('playlistCount').textContent = `(${currentPlaylist.length} videos)`;
+    if (currentPlaylist.length === 0) {
+        pl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">No videos in playlist.</div>';
+        return;
+    }
+    pl.innerHTML = currentPlaylist.map((v, i) => {
+        const ytId = getYouTubeId(v.youtube_link || '');
+        const thumb = ytId ? `<div class="playlist-thumb"><iframe src="https://www.youtube.com/embed/${ytId}?controls=0&modestbranding=1"></iframe></div>` : '<div class="playlist-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-secondary)"><i class="fas fa-play"></i></div>';
+        return `<div class="vp-playlist-item${i === currentVideoIndex ? ' active' : ''}" onclick="playVideoAtIndex(${i})">
+            ${thumb}
+            <div class="playlist-info">
+                <div class="playlist-title">${i+1}. ${escapeHtml(v.title)}</div>
+                <div class="playlist-folder"><i class="fas fa-folder"></i> ${escapeHtml(v.folder_name || 'Demo')}</div>
+                <div class="playlist-date"><i class="fas fa-calendar-alt"></i> ${v.video_date || 'No date'}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function filterPlaylist() {
+    const searchTerm = document.getElementById('vpSearchInput').value.toLowerCase();
+    const playlistItems = document.querySelectorAll('.vp-playlist-item');
+    playlistItems.forEach(item => {
+        const title = item.querySelector('.playlist-title')?.textContent.toLowerCase() || '';
+        if (title.includes(searchTerm)) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function closeVideoPlayer() {
+    document.getElementById('vpPlayerIframe').src = '';
+    document.getElementById('videoPlayerPage').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', function(e) {
+    if (!document.getElementById('videoPlayerPage').classList.contains('active')) return;
+    
+    if (e.key === 'Escape') {
+        closeVideoPlayer();
+    } else if (e.key === 'ArrowLeft') {
+        if (currentVideoIndex > 0) {
+            playVideoAtIndex(currentVideoIndex - 1);
+        }
+    } else if (e.key === 'ArrowRight') {
+        if (currentVideoIndex < currentPlaylist.length - 1) {
+            playVideoAtIndex(currentVideoIndex + 1);
+        }
+    }
+});
+
+// Auto-hide flash messages
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.flash-message').forEach(m => {
+        setTimeout(() => {
+            m.style.opacity = '0';
+            m.style.transform = 'translateX(120%)';
+            setTimeout(() => m.remove(), 400);
+        }, 4000);
+    });
+});
+</script>
+</body>
+</html>

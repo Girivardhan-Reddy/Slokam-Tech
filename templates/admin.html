@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="theme-color" content="#030712">
+    <title>Admin Portal | Slokam Technology</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-deep:#030712;--bg-primary:#050a14;--bg-secondary:#080f1f;--bg-card:#0b1324;
+            --bg-card-hover:#0f1a30;--sidebar-bg:#040912;--border-subtle:rgba(255,255,255,0.04);
+            --border-medium:rgba(255,255,255,0.07);--accent:#6366f1;--accent-glow:#818cf8;
+            --accent-secondary:#a855f7;--accent-tertiary:#06b6d4;--gold:#f59e0b;--gold-glow:#fbbf24;
+            --white:#fff;--text-primary:#e2e8f0;--text-secondary:#94a3b8;--text-muted:#64748b;
+            --success:#10b981;--success-glow:#34d399;--error:#ef4444;--error-glow:#f87171;
+            --warning:#f59e0b;--info:#3b82f6;--radius-sm:10px;--radius:14px;--radius-lg:20px;
+            --radius-xl:28px;--radius-full:9999px;--shadow-glow:0 0 60px rgba(99,102,241,0.1);
+            --shadow-card:0 1px 3px rgba(0,0,0,0.5),0 4px 20px rgba(0,0,0,0.3);
+            --shadow-lg:0 20px 60px rgba(0,0,0,0.5);--transition-fast:0.15s ease;
+            --transition:0.3s cubic-bezier(0.16,1,0.3,1);--transition-bounce:0.5s cubic-bezier(0.34,1.56,0.64,1);
+            --font-sans:'Inter',sans-serif;--font-display:'Outfit',sans-serif;--font-mono:'Space Grotesk',monospace;
+            --sidebar-width:260px;--topbar-height:64px;
+        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-primary);display:flex;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+        ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:10px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.12)}
+        .ambient-bg{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden}
+        .ambient-orb{position:absolute;border-radius:50%;filter:blur(140px);opacity:0.2;animation:ambFloat 14s ease-in-out infinite}
+        .ambient-orb-1{width:500px;height:500px;background:var(--accent);top:-15%;right:-10%;animation-delay:0s}
+        .ambient-orb-2{width:400px;height:400px;background:var(--accent-secondary);bottom:-20%;left:-8%;animation-delay:-6s}
+        .ambient-orb-3{width:350px;height:350px;background:var(--accent-tertiary);top:60%;left:40%;animation-delay:-10s;opacity:0.12}
+        @keyframes ambFloat{0%,100%{transform:translate(0,0)scale(1)}33%{transform:translate(50px,-40px)scale(1.12)}66%{transform:translate(-30px,25px)scale(0.88)}}
+        
+        .sidebar{width:var(--sidebar-width);height:100vh;position:fixed;top:0;left:0;background:var(--sidebar-bg);border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;z-index:1000;transition:transform var(--transition);overflow-y:auto;overflow-x:hidden}
+        .sidebar-header{padding:20px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-subtle)}
+        .sidebar-logo-img{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0}
+        .sidebar-logo{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:none;align-items:center;justify-content:center;font-size:14px;color:var(--white);flex-shrink:0}
+        .sidebar-brand{font-family:var(--font-display);font-weight:700;font-size:16px;color:var(--white);white-space:nowrap}
+        .sidebar-user{padding:16px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:var(--transition-fast)}
+        .sidebar-user:hover{background:rgba(255,255,255,0.02)}
+        .sidebar-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;overflow:hidden;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:var(--white)}
+        .sidebar-avatar img{width:100%;height:100%;object-fit:cover}
+        .sidebar-user-info{overflow:hidden}.sidebar-user-info .name{font-weight:600;font-size:13px;color:var(--white);white-space:nowrap}.sidebar-user-info .email{font-size:10px;color:var(--text-muted);white-space:nowrap}
+        .sidebar-nav{flex:1;padding:10px;display:flex;flex-direction:column;gap:1px}
+        .sidebar-nav a{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--radius-sm);color:var(--text-secondary);text-decoration:none;font-weight:500;font-size:13px;transition:var(--transition-fast);white-space:nowrap;position:relative}
+        .sidebar-nav a:hover{background:rgba(255,255,255,0.03);color:var(--white)}
+        .sidebar-nav a.active{background:rgba(99,102,241,0.12);color:var(--accent-glow);font-weight:600}
+        .sidebar-nav a i{width:20px;text-align:center;font-size:15px;flex-shrink:0}
+        .sidebar-nav a .badge{margin-left:auto;background:var(--error);color:white;font-size:10px;padding:2px 8px;border-radius:var(--radius-full);font-weight:700}
+        .sidebar-footer{padding:10px;border-top:1px solid var(--border-subtle)}
+        .sidebar-footer a{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--radius-sm);color:var(--error-glow);text-decoration:none;font-weight:500;font-size:13px;transition:var(--transition-fast)}
+        .sidebar-footer a:hover{background:rgba(239,68,68,0.1)}
+        
+        .main-content{margin-left:var(--sidebar-width);flex:1;min-height:100vh;display:flex;flex-direction:column;position:relative;z-index:1}
+        .topbar{height:var(--topbar-height);background:rgba(8,15,31,0.85);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:999;gap:16px}
+        .topbar-left{display:flex;align-items:center;gap:14px}.hamburger{display:none;background:none;border:none;color:var(--white);font-size:22px;cursor:pointer;padding:6px;border-radius:var(--radius-sm);transition:var(--transition-fast)}.hamburger:hover{background:rgba(255,255,255,0.05)}
+        .topbar-title{font-family:var(--font-display);font-weight:600;font-size:17px;color:var(--white)}.topbar-right{display:flex;align-items:center;gap:12px}
+        .topbar-btn{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.03);border:1px solid var(--border-medium);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:var(--transition-fast);position:relative;text-decoration:none}
+        .topbar-btn:hover{background:rgba(255,255,255,0.07);color:var(--white)}.topbar-btn .notif-dot{position:absolute;top:6px;right:6px;width:7px;height:7px;background:var(--error);border-radius:50%;border:2px solid var(--bg-secondary)}
+        .profile-dropdown{position:relative}.profile-btn{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border-medium);padding:5px 14px 5px 5px;border-radius:var(--radius-full);cursor:pointer;color:var(--text-primary);font-weight:500;font-size:12px;transition:var(--transition-fast)}.profile-btn:hover{background:rgba(255,255,255,0.07)}
+        .profile-btn-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:white;overflow:hidden}.profile-btn-avatar img{width:100%;height:100%;object-fit:cover}
+        .dropdown-menu{position:absolute;top:115%;right:0;background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius);min-width:200px;box-shadow:var(--shadow-lg);opacity:0;visibility:hidden;transform:translateY(-8px);transition:var(--transition-fast);z-index:100;overflow:hidden}
+        .dropdown-menu.show{opacity:1;visibility:visible;transform:translateY(0)}.dropdown-menu a{display:flex;align-items:center;gap:10px;padding:11px 16px;color:var(--text-secondary);text-decoration:none;font-size:12px;font-weight:500;transition:var(--transition-fast)}.dropdown-menu a:hover{background:rgba(255,255,255,0.03);color:var(--white)}.dropdown-menu a.text-danger{color:var(--error-glow)}.dropdown-divider{height:1px;background:var(--border-subtle)}
+        .page-content{padding:24px;flex:1;display:flex;flex-direction:column;gap:22px}
+        
+        .flash-container{position:fixed;top:80px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px}
+        .flash-message{padding:13px 18px;border-radius:var(--radius);font-weight:500;font-size:12px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(30px);animation:flashIn 0.4s ease,flashOut 0.4s ease 3.6s forwards;box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,0.08)}
+        .flash-message.success{background:rgba(16,185,129,0.18);color:var(--success-glow);border-color:rgba(16,185,129,0.25)}.flash-message.error{background:rgba(239,68,68,0.18);color:var(--error-glow);border-color:rgba(239,68,68,0.25)}.flash-message.warning{background:rgba(245,158,11,0.18);color:var(--gold-glow);border-color:rgba(245,158,11,0.25)}.flash-message.info{background:rgba(99,102,241,0.18);color:var(--accent-glow);border-color:rgba(99,102,241,0.25)}
+        @keyframes flashIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes flashOut{from{transform:translateX(0);opacity:1}to{transform:translateX(120%);opacity:0}}
+        
+        .section-content{display:none;animation:fadeUp 0.4s ease}.section-content.active{display:block}@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+        .stat-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);padding:20px;transition:var(--transition);position:relative;overflow:hidden}.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-glow);border-color:rgba(99,102,241,0.25)}
+        .stat-card .stat-icon{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;margin-bottom:12px}
+        .icon-indigo{background:rgba(99,102,241,0.12);color:var(--accent-glow)}.icon-emerald{background:rgba(16,185,129,0.12);color:var(--success-glow)}.icon-amber{background:rgba(245,158,11,0.12);color:var(--gold-glow)}.icon-purple{background:rgba(168,85,247,0.12);color:var(--accent-secondary)}.icon-cyan{background:rgba(6,182,212,0.12);color:var(--accent-tertiary)}.icon-rose{background:rgba(244,63,94,0.12);color:var(--error-glow)}
+        .stat-card .stat-value{font-family:var(--font-display);font-size:28px;font-weight:700;color:var(--white);margin-bottom:2px}.stat-card .stat-label{font-size:11px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:0.8px}
+        
+        .empty-state{text-align:center;padding:50px 30px;background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg)}.empty-state .empty-icon{font-size:48px;color:var(--text-muted);margin-bottom:14px;opacity:0.4}.empty-state h3{font-size:17px;font-weight:600;color:var(--white);margin-bottom:6px}.empty-state p{font-size:13px;color:var(--text-secondary)}
+        
+        .table-container{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);overflow:hidden}
+        .table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap;gap:12px}.table-header h3{font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--white)}.table-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+        .search-box{display:flex;align-items:center;background:rgba(255,255,255,0.03);border:1px solid var(--border-medium);border-radius:var(--radius-full);padding:8px 14px;gap:8px;transition:var(--transition-fast)}.search-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,0.08)}.search-box i{color:var(--text-muted);font-size:13px}.search-box input{background:none;border:none;color:var(--white);font-size:12px;outline:none;width:160px;font-family:var(--font-sans)}.search-box input::placeholder{color:var(--text-muted)}
+        .filter-select{background:rgba(255,255,255,0.03);border:1px solid var(--border-medium);border-radius:var(--radius-full);padding:8px 14px;color:var(--white);font-size:12px;font-family:var(--font-sans);cursor:pointer;outline:none;transition:var(--transition-fast)}.filter-select:focus{border-color:var(--accent)}.filter-select option{background:var(--bg-card);color:var(--white)}
+        .table-wrap{overflow-x:auto;max-height:480px;overflow-y:auto}table{width:100%;border-collapse:collapse;font-size:12px}thead{position:sticky;top:0;z-index:10}thead th{background:var(--bg-card);color:var(--text-muted);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:12px 14px;text-align:left;border-bottom:1px solid var(--border-subtle);white-space:nowrap}
+        tbody td{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.02);color:var(--text-primary);white-space:nowrap}tbody tr{transition:var(--transition-fast)}tbody tr:hover{background:rgba(255,255,255,0.015)}
+        .status-badge{display:inline-block;padding:4px 10px;border-radius:var(--radius-full);font-size:10px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase}.status-badge.approved{background:rgba(16,185,129,0.12);color:var(--success-glow)}.status-badge.pending{background:rgba(245,158,11,0.12);color:var(--gold-glow)}.status-badge.rejected{background:rgba(239,68,68,0.12);color:var(--error-glow)}.status-badge.all{background:rgba(99,102,241,0.12);color:var(--accent-glow)}
+        
+        .btn{padding:9px 18px;border-radius:var(--radius-full);font-weight:600;font-size:12px;cursor:pointer;border:none;transition:var(--transition-fast);font-family:var(--font-sans);display:inline-flex;align-items:center;gap:6px;text-decoration:none;white-space:nowrap}
+        .btn-sm{padding:6px 12px;font-size:10px}.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-secondary));color:white;box-shadow:0 3px 15px rgba(99,102,241,0.25)}.btn-primary:hover{box-shadow:0 6px 25px rgba(99,102,241,0.4);transform:translateY(-1px)}.btn-success{background:var(--success);color:white}.btn-success:hover{background:#059669}.btn-danger{background:var(--error);color:white}.btn-danger:hover{background:#dc2626}.btn-outline{background:transparent;border:1px solid var(--border-medium);color:var(--text-primary)}.btn-outline:hover{border-color:var(--accent-glow);color:var(--accent-glow);background:rgba(99,102,241,0.06)}.btn-ghost{background:transparent;color:var(--text-secondary)}.btn-ghost:hover{color:var(--white);background:rgba(255,255,255,0.04)}.btn-icon{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0}
+        
+        .batch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.batch-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);padding:22px;transition:var(--transition)}.batch-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-glow);border-color:rgba(99,102,241,0.25)}.batch-card h4{font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--white);margin-bottom:6px}.batch-card .batch-stats{display:flex;gap:16px;margin-bottom:12px}.batch-card .batch-stat{text-align:center}.batch-card .batch-stat .num{font-size:20px;font-weight:700;color:var(--accent-glow)}.batch-card .batch-stat .lbl{font-size:10px;color:var(--text-muted);text-transform:uppercase}.batch-card .batch-actions{display:flex;gap:6px;flex-wrap:wrap}
+        
+        .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:16px}.chart-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);padding:18px}.chart-card h4{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--white);margin-bottom:14px}.chart-wrap{position:relative;width:100%;height:260px}.chart-wrap canvas{width:100%!important;height:100%!important}
+        
+        .activity-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:11px}.activity-item:last-child{border-bottom:none}.activity-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px}.dot-green{background:var(--success)}.dot-blue{background:var(--accent)}.dot-amber{background:var(--gold)}.dot-purple{background:var(--accent-secondary)}.dot-red{background:var(--error)}.activity-info{flex:1;min-width:0}.activity-info .act-desc{color:var(--white);font-size:11px}.activity-info .act-meta{color:var(--text-muted);font-size:10px}
+        
+        /* Folder Grid Styles */
+        .folders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+        .folder-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);padding:24px;cursor:pointer;transition:var(--transition);text-align:center;position:relative;overflow:hidden}
+        .folder-card:hover{transform:translateY(-4px);border-color:var(--accent-glow);box-shadow:var(--shadow-glow)}
+        .folder-card .folder-icon{font-size:48px;color:var(--accent-glow);margin-bottom:16px}
+        .folder-card h4{font-size:16px;font-weight:600;color:var(--white);margin-bottom:8px}
+        .folder-card .folder-stats{font-size:11px;color:var(--text-muted);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px}
+        .folder-card .folder-stats i{margin-right:4px}
+        .folder-card .folder-actions{position:absolute;top:12px;right:12px;display:flex;gap:4px;opacity:0;transition:var(--transition-fast)}
+        .folder-card:hover .folder-actions{opacity:1}
+        .folder-card .folder-actions button,.folder-card .folder-actions a{background:rgba(0,0,0,0.6);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--white);font-size:11px;border:none;cursor:pointer}
+        .folder-card .folder-actions button:hover,.folder-card .folder-actions a:hover{background:rgba(239,68,68,0.8)}
+        
+        /* Video Grid - YouTube Style */
+        .videos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+        .video-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;transition:var(--transition);position:relative}
+        .video-card:hover{transform:translateY(-4px);border-color:var(--accent-glow);box-shadow:var(--shadow-glow)}
+        .video-thumb{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden}
+        .video-thumb iframe{width:100%;height:100%;border:none;pointer-events:none;transform:scale(1.05)}
+        .video-thumb .play-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;opacity:0;transition:var(--transition-fast)}
+        .video-card:hover .video-thumb .play-overlay{opacity:1}
+        .video-thumb .play-overlay i{font-size:48px;color:white;text-shadow:0 2px 10px rgba(0,0,0,0.5)}
+        .demo-badge{position:absolute;top:8px;right:8px;background:linear-gradient(135deg,var(--accent-tertiary),#0891b2);color:white;padding:2px 8px;border-radius:var(--radius-full);font-size:9px;font-weight:600}
+        .video-info{padding:14px}
+        .video-info h4{font-size:14px;font-weight:600;color:var(--white);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .video-info .video-meta{display:flex;gap:12px;font-size:10px;color:var(--text-muted);margin-bottom:4px}
+        .video-info .video-meta span{display:flex;align-items:center;gap:4px}
+        .video-date{font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;margin-bottom:8px}
+        .video-resources{display:flex;gap:6px;flex-wrap:wrap}
+        .resource-link{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:var(--radius-full);font-size:9px;font-weight:600;text-decoration:none}
+        .resource-link.notes{background:rgba(16,185,129,0.12);color:var(--success-glow)}
+        .resource-link.exercise{background:rgba(245,158,11,0.12);color:var(--gold-glow)}
+        .resource-link.practice{background:rgba(99,102,241,0.12);color:var(--accent-glow)}
+        .video-actions{position:absolute;top:8px;left:8px;display:flex;gap:4px;opacity:0;transition:var(--transition-fast);z-index:10}
+        .video-card:hover .video-actions{opacity:1}
+        .video-action-btn{background:rgba(0,0,0,0.7);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--white);font-size:11px;border:none;cursor:pointer}
+        .video-action-btn:hover{background:var(--accent-glow);color:white}
+        .video-action-btn.danger:hover{background:var(--error)}
+        
+        /* YouTube Style Video Player for Admin */
+        .video-player-page{position:fixed;top:0;left:0;width:100%;height:100%;z-index:20000;background:var(--bg-deep);display:none;flex-direction:column}
+        .video-player-page.active{display:flex}
+        .vp-topbar{height:56px;background:var(--bg-secondary);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0}
+        .vp-back{background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:8px 12px;border-radius:var(--radius-sm);transition:var(--transition-fast);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500}
+        .vp-back:hover{background:rgba(255,255,255,0.05);color:var(--white)}
+        .vp-title{font-family:var(--font-display);font-weight:600;font-size:16px;color:var(--white);text-align:center;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 16px}
+        .vp-search{background:rgba(255,255,255,0.05);border:1px solid var(--border-medium);border-radius:var(--radius-full);padding:6px 14px;display:flex;align-items:center;gap:8px;width:280px}
+        .vp-search i{color:var(--text-muted);font-size:13px}
+        .vp-search input{background:none;border:none;color:var(--white);font-size:13px;outline:none;width:100%;font-family:var(--font-sans)}
+        .vp-search input::placeholder{color:var(--text-muted)}
+        .vp-body{flex:1;display:flex;overflow:hidden}
+        .vp-main{flex:1;display:flex;flex-direction:column;overflow-y:auto;min-width:0;padding:24px 32px}
+        .vp-video-container{max-width:1000px;width:100%;margin:0 auto}
+        .vp-video-wrapper{position:relative;width:100%;padding-bottom:56.25%;background:#000;border-radius:var(--radius-lg);overflow:hidden}
+        .vp-video-wrapper iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+        .vp-video-info{margin-top:20px}
+        .vp-video-title{font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--white);margin-bottom:8px}
+        .vp-video-meta{display:flex;gap:16px;font-size:12px;color:var(--text-muted);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border-subtle)}
+        .vp-description-section{background:rgba(255,255,255,0.02);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px}
+        .vp-description-section h4{font-size:13px;font-weight:600;color:var(--white);margin-bottom:8px}
+        .vp-description-section p{font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap}
+        .vp-resources-section{background:rgba(255,255,255,0.02);border-radius:var(--radius-lg);padding:20px}
+        .vp-resources-section h4{font-size:13px;font-weight:600;color:var(--white);margin-bottom:12px}
+        .resources-grid{display:flex;gap:12px;flex-wrap:wrap}
+        .resource-card{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius);padding:10px 16px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:var(--transition-fast);text-decoration:none}
+        .resource-card:hover{border-color:var(--accent-glow);transform:translateY(-2px);background:rgba(99,102,241,0.05)}
+        .resource-card i{font-size:16px}
+        .resource-card.notes i{color:var(--success-glow)}
+        .resource-card.exercise i{color:var(--gold-glow)}
+        .resource-card.practice i{color:var(--accent-glow)}
+        .resource-card span{font-size:11px;font-weight:500;color:var(--white)}
+        .vp-sidebar{width:380px;background:var(--bg-secondary);border-left:1px solid var(--border-subtle);display:flex;flex-direction:column;flex-shrink:0}
+        .vp-sidebar-header{padding:16px 20px;border-bottom:1px solid var(--border-subtle)}
+        .vp-sidebar-header h3{font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--white);display:flex;align-items:center;gap:8px}
+        .vp-sidebar-header h3 i{color:var(--accent-glow)}
+        .vp-playlist{flex:1;overflow-y:auto}
+        .vp-playlist-item{display:flex;gap:12px;padding:12px 16px;cursor:pointer;transition:var(--transition-fast);border-bottom:1px solid rgba(255,255,255,0.03)}
+        .vp-playlist-item:hover{background:rgba(255,255,255,0.03)}
+        .vp-playlist-item.active{background:rgba(99,102,241,0.1);border-left:3px solid var(--accent-glow)}
+        .playlist-thumb{width:120px;height:68px;border-radius:var(--radius-sm);background:#000;overflow:hidden;position:relative;flex-shrink:0}
+        .playlist-thumb iframe{width:100%;height:100%;border:none;pointer-events:none;transform:scale(1.1)}
+        .playlist-info{flex:1;min-width:0}
+        .playlist-title{font-size:13px;font-weight:600;color:var(--white);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .playlist-folder{font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;margin-bottom:2px}
+        .playlist-date{font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:4px}
+        
+        /* WhatsApp Style Announcements */
+        .wa-message{background:var(--bg-card);border-radius:var(--radius-lg);padding:20px;transition:var(--transition);border:1px solid var(--border-medium);position:relative;margin-bottom:16px}
+        .wa-message:hover{transform:translateY(-2px);border-color:rgba(99,102,241,0.3);box-shadow:var(--shadow-glow)}
+        .wa-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+        .wa-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));display:flex;align-items:center;justify-content:center;font-weight:700;color:white;flex-shrink:0;overflow:hidden}
+        .wa-avatar img{width:100%;height:100%;object-fit:cover}
+        .wa-info{flex:1}.wa-info h4{font-size:14px;font-weight:600;color:var(--white);margin-bottom:2px}.wa-info .wa-meta{font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .wa-batch{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--radius-full);font-size:9px;font-weight:600}.wa-batch.all{background:rgba(99,102,241,0.15);color:var(--accent-glow)}.wa-batch.specific{background:rgba(245,158,11,0.15);color:var(--gold-glow)}
+        .wa-content{padding:8px 0 12px 0;border-bottom:1px solid var(--border-subtle);margin-bottom:12px}
+        .wa-content .wa-title{font-size:15px;font-weight:600;color:var(--white);margin-bottom:8px}
+        .wa-content .wa-text{font-size:13px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap}
+        .wa-attachment{background:rgba(255,255,255,0.02);border-radius:var(--radius);padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:12px;transition:var(--transition-fast);cursor:pointer;border:1px solid rgba(255,255,255,0.05)}
+        .wa-attachment:hover{background:rgba(255,255,255,0.04);border-color:var(--accent-glow)}
+        .wa-attachment i{font-size:24px;color:var(--accent-tertiary)}
+        .wa-attachment-info{flex:1}.wa-attachment-info .att-name{font-size:12px;font-weight:500;color:var(--white);margin-bottom:2px}.wa-attachment-info .att-size{font-size:10px;color:var(--text-muted)}
+        .wa-link{background:rgba(99,102,241,0.08);border-radius:var(--radius);padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:12px;transition:var(--transition-fast);cursor:pointer;text-decoration:none;border:1px solid rgba(99,102,241,0.15)}
+        .wa-link:hover{background:rgba(99,102,241,0.15);border-color:var(--accent-glow)}
+        .wa-link i{font-size:20px;color:var(--accent-glow)}
+        .wa-link-info{flex:1}.wa-link-info .link-title{font-size:12px;font-weight:500;color:var(--white)}.wa-link-info .link-url{font-size:10px;color:var(--text-muted);word-break:break-all}
+        .wa-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+        .announcements-list{display:flex;flex-direction:column;gap:16px}
+        
+        /* Student Detail Modal with Avatar */
+        .student-detail-full{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+        .student-detail-full div{font-size:11px}.student-detail-full strong{color:var(--text-muted);display:block;font-size:9px;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px}.student-detail-full span{color:var(--white);font-size:12px}
+        .student-avatar-large{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));display:flex;align-items:center;justify-content:center;font-size:35px;font-weight:700;color:white;margin:0 auto 15px;overflow:hidden}
+        .student-avatar-large img{width:100%;height:100%;object-fit:cover}
+        
+        .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:opacity 0.3s ease,visibility 0.3s ease;padding:20px}
+        .modal-overlay.active{opacity:1;visibility:visible}
+        .modal-dialog{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:var(--radius-xl);padding:30px 26px;width:100%;max-width:480px;box-shadow:var(--shadow-lg);transform:translateY(20px)scale(0.95);transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);max-height:85vh;overflow-y:auto;position:relative}
+        .modal-overlay.active .modal-dialog{transform:translateY(0)scale(1)}.modal-dialog.modal-lg{max-width:620px}.modal-dialog.modal-xl{max-width:900px}
+        .modal-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.04);border:1px solid var(--border-medium);color:var(--text-secondary);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:var(--transition-fast);z-index:2}
+        .modal-close:hover{background:rgba(239,68,68,0.15);color:var(--error-glow)}.modal-dialog h2{font-family:var(--font-display);font-size:21px;font-weight:700;color:var(--white);margin-bottom:4px}.modal-subtitle{color:var(--text-muted);font-size:12px;margin-bottom:22px}
+        .form-group{margin-bottom:14px}.form-group label{display:block;font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1.2px}
+        .form-group input,.form-group textarea,.form-group select{width:100%;padding:11px 15px;background:rgba(255,255,255,0.03);border:1px solid var(--border-medium);border-radius:var(--radius);color:var(--white);font-size:13px;font-family:var(--font-sans);transition:var(--transition-fast);outline:none}
+        .form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,0.08);background:rgba(255,255,255,0.05)}
+        .form-group textarea{resize:vertical;min-height:80px}.form-group select option{background:var(--bg-card);color:var(--white)}
+        .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+        .form-group input[type="file"]{padding:9px;font-size:11px}
+        .profile-avatar-upload{text-align:center;margin-bottom:16px}.profile-avatar-preview{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;color:white;margin:0 auto 10px;overflow:hidden}.profile-avatar-preview img{width:100%;height:100%;object-fit:cover}
+        
+        .admin-footer{text-align:center;padding:14px 24px;color:var(--text-muted);font-size:11px;border-top:1px solid var(--border-subtle);margin-top:auto}
+        .sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:999}.sidebar-overlay.active{display:block}
+        
+        @media(max-width:1024px){.sidebar{transform:translateX(-100%)}.sidebar.mobile-open{transform:translateX(0)}.main-content{margin-left:0}.hamburger{display:block}.charts-grid{grid-template-columns:1fr}.student-detail-full{grid-template-columns:1fr 1fr}.vp-body{flex-direction:column}.vp-sidebar{width:100%;max-height:300px;border-left:none;border-top:1px solid var(--border-subtle)}.vp-main{padding:16px}.vp-search{display:none}}
+        @media(max-width:768px){.page-content{padding:14px}.topbar{padding:0 14px}.topbar-title{font-size:15px}.stats-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}.stat-card .stat-value{font-size:22px}.form-row{grid-template-columns:1fr}.folders-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}.videos-grid{grid-template-columns:1fr}.student-detail-full{grid-template-columns:1fr}}
+        @media(max-width:480px){.stats-grid{grid-template-columns:1fr 1fr}.stat-card{padding:14px}.modal-dialog{padding:22px 16px}.wa-header{gap:8px}.wa-avatar{width:32px;height:32px;font-size:12px}.folders-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="ambient-bg"><div class="ambient-orb ambient-orb-1"></div><div class="ambient-orb ambient-orb-2"></div><div class="ambient-orb ambient-orb-3"></div></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <img src="https://play-lh.googleusercontent.com/_kvdk0-jX5RDlc9eW903Vx59JepDDr0skF693OEugwIHvEggcKZBPwIxjNKm576rbQ=w240-h480-rw" alt="Slokam Logo" class="sidebar-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="sidebar-logo" style="display:none"><i class="fas fa-infinity"></i></div>
+        <span class="sidebar-brand">Slokam Technology</span>
+    </div>
+    <div class="sidebar-user" onclick="openModal('profileModal')">
+        <div class="sidebar-avatar" id="sidebarAvatar">
+            {% if admin_avatar and admin_avatar != '' %}
+                <img src="{{ admin_avatar }}" alt="Admin">
+            {% else %}
+                {{ admin_name[0].upper() if admin_name else 'A' }}
+            {% endif %}
+        </div>
+        <div class="sidebar-user-info">
+            <div class="name">{{ admin_name or 'Administrator' }}</div>
+            <div class="email">{{ admin_email or '' }}</div>
+        </div>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="#" class="{% if active_tab == 'dashboard' %}active{% endif %}" onclick="switchTab('dashboard')"><i class="fas fa-th-large"></i> Dashboard</a>
+        <a href="#" class="{% if active_tab == 'students' %}active{% endif %}" onclick="switchTab('students')"><i class="fas fa-user-graduate"></i> Students{% if pending_students > 0 %}<span class="badge">{{ pending_students }}</span>{% endif %}</a>
+        <a href="#" class="{% if active_tab == 'batches' %}active{% endif %}" onclick="switchTab('batches')"><i class="fas fa-layer-group"></i> Batches</a>
+        <a href="#" class="{% if active_tab == 'folders' %}active{% endif %}" onclick="switchTab('folders')"><i class="fas fa-folder"></i> Folders</a>
+        <a href="#" class="{% if active_tab == 'videos' %}active{% endif %}" onclick="switchTab('videos')"><i class="fas fa-video"></i> Videos</a>
+        <a href="#" class="{% if active_tab == 'announcements' %}active{% endif %}" onclick="switchTab('announcements')"><i class="fas fa-bullhorn"></i> Announcements</a>
+        <a href="#" class="{% if active_tab == 'analytics' %}active{% endif %}" onclick="switchTab('analytics')"><i class="fas fa-chart-bar"></i> Analytics</a>
+    </nav>
+    <div class="sidebar-footer"><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></div>
+</aside>
+
+<div class="main-content" id="mainContent">
+    <header class="topbar">
+        <div class="topbar-left"><button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button><span class="topbar-title" id="topbarTitle">Dashboard</span></div>
+        <div class="topbar-right">
+            <button class="topbar-btn" title="Notifications" id="notifBtn"><i class="fas fa-bell"></i></button>
+            <button class="topbar-btn" title="Settings" onclick="openModal('profileModal')"><i class="fas fa-cog"></i></button>
+            <div class="profile-dropdown">
+                <button class="profile-btn" onclick="toggleProfileDropdown()">
+                    <div class="profile-btn-avatar" id="topbarAvatar">
+                        {% if admin_avatar and admin_avatar != '' %}
+                            <img src="{{ admin_avatar }}" alt="Admin">
+                        {% else %}
+                            {{ admin_name[0].upper() if admin_name else 'A' }}
+                        {% endif %}
+                    </div>
+                    <span>{{ admin_name or 'Admin' }}</span><i class="fas fa-chevron-down" style="font-size:9px"></i>
+                </button>
+                <div class="dropdown-menu" id="profileDropdown">
+                    <a href="#" onclick="openModal('profileModal');toggleProfileDropdown()"><i class="fas fa-user"></i> View Profile</a>
+                    <a href="#" onclick="openModal('profileModal');toggleProfileDropdown()"><i class="fas fa-cog"></i> Settings</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('logout') }}" class="text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flash-container" id="flashContainer">
+        {% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}<div class="flash-message {{ cat }}">{% if cat=='success' %}<i class="fas fa-circle-check"></i>{% elif cat=='error' %}<i class="fas fa-circle-exclamation"></i>{% elif cat=='warning' %}<i class="fas fa-triangle-exclamation"></i>{% else %}<i class="fas fa-circle-info"></i>{% endif %}{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}
+    </div>
+
+    <div class="page-content">
+        <!-- DASHBOARD -->
+        <div class="section-content {% if active_tab=='dashboard' %}active{% endif %}" id="tab-dashboard">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-icon icon-indigo"><i class="fas fa-users"></i></div><div class="stat-value">{{ total_students|default(0) }}</div><div class="stat-label">Total Students</div></div>
+                <div class="stat-card"><div class="stat-icon icon-emerald"><i class="fas fa-user-check"></i></div><div class="stat-value">{{ approved_students|default(0) }}</div><div class="stat-label">Approved</div></div>
+                <div class="stat-card"><div class="stat-icon icon-amber"><i class="fas fa-clock"></i></div><div class="stat-value">{{ pending_students|default(0) }}</div><div class="stat-label">Pending</div></div>
+                <div class="stat-card"><div class="stat-icon icon-rose"><i class="fas fa-user-xmark"></i></div><div class="stat-value">{{ rejected_students|default(0) }}</div><div class="stat-label">Rejected</div></div>
+                <div class="stat-card"><div class="stat-icon icon-purple"><i class="fas fa-layer-group"></i></div><div class="stat-value">{{ total_batches|default(0) }}</div><div class="stat-label">Batches</div></div>
+                <div class="stat-card"><div class="stat-icon icon-cyan"><i class="fas fa-folder"></i></div><div class="stat-value">{{ total_folders|default(0) }}</div><div class="stat-label">Folders</div></div>
+                <div class="stat-card"><div class="stat-icon icon-indigo"><i class="fas fa-video"></i></div><div class="stat-value">{{ total_videos|default(0) }}</div><div class="stat-label">Videos</div></div>
+                <div class="stat-card"><div class="stat-icon icon-amber"><i class="fas fa-bullhorn"></i></div><div class="stat-value">{{ total_announcements|default(0) }}</div><div class="stat-label">Announcements</div></div>
+                <div class="stat-card"><div class="stat-icon icon-emerald"><i class="fas fa-fire"></i></div><div class="stat-value">{{ average_streak|default(0) }}</div><div class="stat-label">Avg Streak</div></div>
+                <div class="stat-card"><div class="stat-icon icon-purple"><i class="fas fa-trophy"></i></div><div class="stat-value" style="font-size:14px">{{ most_active_batch|default('N/A') }}</div><div class="stat-label">Most Active Batch</div></div>
+            </div>
+            <div class="charts-grid">
+                <div class="chart-card"><h4>Student Activity Feed</h4><div style="max-height:280px;overflow-y:auto">{% if student_activities %}{% for act in student_activities %}<div class="activity-item"><div class="activity-dot dot-blue"></div><div class="activity-info"><div class="act-desc"><strong>{{ act.student_name or 'Unknown' }}</strong> - {{ act.description }}</div><div class="act-meta">{{ act.created_at or 'Just now' }}</div></div></div>{% endfor %}{% else %}<div class="empty-state" style="background:transparent;border:none;padding:30px"><p>No activity recorded yet.</p></div>{% endif %}</div></div>
+                <div class="chart-card"><h4>Student Growth</h4><div class="chart-wrap"><canvas id="chartStudentGrowth"></canvas></div></div>
+            </div>
+        </div>
+
+        <!-- STUDENTS TABLE -->
+        <div class="section-content {% if active_tab=='students' %}active{% endif %}" id="tab-students">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Student Management</h3>
+                    <div class="table-actions">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="studentSearch" placeholder="Search..." onkeyup="filterStudentTable()" value="{{ search|default('') }}"></div>
+                        <select class="filter-select" id="batchFilter" onchange="filterStudentTable()"><option value="">All Batches</option>{% if batches %}{% for b in batches %}<option value="{{ b }}" {% if batch_filter==b %}selected{% endif %}>{{ b }}</option>{% endfor %}{% endif %}</select>
+                        <select class="filter-select" id="statusFilter" onchange="filterStudentTable()"><option value="">All Status</option><option value="approved" {% if status_filter=='approved' %}selected{% endif %}>Approved</option><option value="pending" {% if status_filter=='pending' %}selected{% endif %}>Pending</option><option value="rejected" {% if status_filter=='rejected' %}selected{% endif %}>Rejected</option></select>
+                    </div>
+                </div>
+                {% if students and students|length > 0 %}
+                <div class="table-wrap"><table id="studentTable"><thead><tr><th>Student ID</th><th>Avatar</th><th>Name</th><th>Email</th><th>Batch</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead><tbody>{% for student in students %}
+                <tr><td style="font-family:var(--font-mono);font-size:11px">{{ student.student_id }}</td>
+                    <td><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:12px;font-weight:700;color:white">{% if student.avatar and student.avatar != '' %}<img src="{{ student.avatar }}" style="width:100%;height:100%;object-fit:cover">{% else %}{{ student.fullname[0].upper() if student.fullname else 'S' }}{% endif %}</div></td>
+                    <td>{{ student.fullname }}</td>
+                    <td>{{ student.email }}</td>
+                    <td>{{ student.batch }}</td>
+                    <td>{{ student.mobile_number|default('-') }}</td>
+                    <td><span class="status-badge {{ student.status }}">{{ student.status }}</span></td>
+                    <td>
+                        <button class="btn btn-ghost btn-icon btn-sm" onclick='viewStudentDetail("{{ student.id }}","{{ student.student_id }}","{{ student.fullname|e }}","{{ student.email }}","{{ student.batch }}","{{ student.joined_month }}","{{ student.status }}","{{ student.login_streak|default(0) }}","{{ student.created_at|default('') }}","{{ student.mobile_number|default('') }}","{{ student.parent_mobile|default('') }}","{{ student.college_name|default('') }}","{{ student.qualification|default('') }}","{{ student.passed_out_year|default('') }}","{{ student.avatar|default('') }}")'><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-ghost btn-icon btn-sm" onclick='openEditStudent("{{ student.id }}","{{ student.fullname|e }}","{{ student.email }}","{{ student.batch }}","{{ student.joined_month }}","{{ student.status }}")'><i class="fas fa-pen"></i></button>
+                        {% if student.status == 'pending' %}
+                            <a href="{{ url_for('approve_student', object_id=student.id) }}" class="btn btn-success btn-icon btn-sm"><i class="fas fa-check"></i></a>
+                            <a href="{{ url_for('reject_student', object_id=student.id) }}" class="btn btn-danger btn-icon btn-sm" onclick="return confirm('Reject this student?')"><i class="fas fa-times"></i></a>
+                        {% endif %}
+                        <a href="{{ url_for('admin_delete_student', object_id=student.id) }}" class="btn btn-danger btn-icon btn-sm" onclick="return confirm('Delete this student permanently?')"><i class="fas fa-trash"></i></a>
+                     </td>
+                 </tr>
+                {% endfor %}</tbody></table></div>
+                {% else %}<div class="empty-state"><div class="empty-icon"><i class="fas fa-user-graduate"></i></div><h3>No students found</h3><p>Students appear after registration.</p></div>{% endif %}
+            </div>
+        </div>
+
+        <!-- BATCHES -->
+        <div class="section-content {% if active_tab=='batches' %}active{% endif %}" id="tab-batches">
+            {% if batch_data and batch_data|length > 0 %}<div class="batch-grid">{% for bname,bdata in batch_data.items() %}<div class="batch-card"><h4>{{ bname }}</h4><div class="batch-stats"><div class="batch-stat"><div class="num">{{ bdata.students|length }}</div><div class="lbl">Total</div></div><div class="batch-stat"><div class="num" style="color:var(--success-glow)">{{ bdata.approved }}</div><div class="lbl">Approved</div></div><div class="batch-stat"><div class="num" style="color:var(--gold-glow)">{{ bdata.pending }}</div><div class="lbl">Pending</div></div><div class="batch-stat"><div class="num">{{ bdata.avg_streak }}</div><div class="lbl">Avg Streak</div></div></div><div class="batch-actions"><button class="btn btn-outline btn-sm" onclick="viewBatchStudents('{{ bname }}')"><i class="fas fa-users"></i> View Students</button></div></div>{% endfor %}</div>{% else %}<div class="empty-state"><div class="empty-icon"><i class="fas fa-layer-group"></i></div><h3>No batches available</h3><p>Batches are auto-created when students register.</p></div>{% endif %}
+        </div>
+
+        <!-- FOLDERS -->
+        <div class="section-content {% if active_tab=='folders' %}active{% endif %}" id="tab-folders">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3><i class="fas fa-folder"></i> Folder Management</h3>
+                    <button class="btn btn-primary btn-sm" onclick="openModal('addFolderModal')"><i class="fas fa-plus"></i> Add Folder</button>
+                </div>
+                <div class="section-body">
+                    {% if folders and folders|length > 0 %}
+                    <div class="folders-grid">
+                        {% for folder in folders %}
+                        {% set video_count = namespace(value=0) %}
+                        {% for v in videos if v.folder_id == folder.id %}{% set video_count.value = video_count.value + 1 %}{% endfor %}
+                        <div class="folder-card" onclick="openFolderVideos('{{ folder.id }}','{{ folder.folder_name }}')">
+                            <div class="folder-icon"><i class="fas fa-folder-open"></i></div>
+                            <h4>{{ folder.folder_name }}</h4>
+                            <div class="folder-stats"><span><i class="fas fa-video"></i> {{ video_count.value }} Videos</span>{% if folder.folder_date %}<span><i class="fas fa-calendar"></i> {{ folder.folder_date[:10] if folder.folder_date else '' }}</span>{% endif %}</div>
+                            <div class="folder-actions"><button class="btn-icon" onclick="event.stopPropagation();openEditFolder('{{ folder.id }}','{{ folder.folder_name }}','{{ folder.folder_date }}')"><i class="fas fa-pen"></i></button><a href="{{ url_for('delete_folder',object_id=folder.id) }}" class="btn-icon" onclick="event.stopPropagation();return confirm('Delete this folder?')"><i class="fas fa-trash"></i></a></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}<div class="empty-state"><div class="empty-icon"><i class="fas fa-folder-open"></i></div><p>No folders available. Click "Add Folder" to create one.</p></div>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- FOLDER VIDEOS VIEW -->
+        <div class="section-content" id="section-folder-videos">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3><i class="fas fa-folder-open"></i> <span id="folderVideoTitle">Folder Videos</span></h3>
+                    <button class="btn btn-outline btn-sm" onclick="switchTab('folders')"><i class="fas fa-arrow-left"></i> Back to Folders</button>
+                </div>
+                <div class="section-body" id="folderVideoList"><div class="empty-state"><p>Select a folder to view videos.</p></div></div>
+            </div>
+        </div>
+
+        <!-- VIDEOS - YouTube Grid Layout -->
+        <div class="section-content {% if active_tab=='videos' %}active{% endif %}" id="tab-videos">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3><i class="fas fa-video"></i> Video Management</h3>
+                    <button class="btn btn-primary btn-sm" onclick="openModal('addVideoModal')"><i class="fas fa-plus"></i> Add Video</button>
+                </div>
+                <div class="section-body">
+                    {% if videos and videos|length > 0 %}
+                    <div class="videos-grid" id="allVideosGrid">
+                        {% for video in videos %}
+                        <div class="video-card" onclick='openVideoPlayerAdmin("{{ video.youtube_link }}","{{ video.title|e }}","{{ video.folder_name|e }}","{{ video.description|default('')|e }}","{{ video.notes_file|default('') }}","{{ video.exercise_file|default('') }}","{{ video.practice_file|default('') }}","{{ video.video_date|default('') }}","{{ video.folder_id }}")'>
+                            <div class="video-thumb">
+                                {% set yt_link = video.youtube_link or '' %}
+                                {% if yt_link %}
+                                    {% if 'youtu.be/' in yt_link %}
+                                        {% set vid = yt_link.split('youtu.be/')[-1].split('?')[0].split('&')[0] %}
+                                    {% elif 'watch?v=' in yt_link %}
+                                        {% set vid = yt_link.split('watch?v=')[-1].split('&')[0] %}
+                                    {% elif 'embed/' in yt_link %}
+                                        {% set vid = yt_link.split('embed/')[-1].split('?')[0] %}
+                                    {% else %}{% set vid = '' %}{% endif %}
+                                    {% if vid %}<iframe src="https://www.youtube.com/embed/{{ vid }}?controls=0&modestbranding=1"></iframe>{% endif %}
+                                {% endif %}
+                                <div class="play-overlay"><i class="fas fa-play-circle"></i></div>
+                                {% if video.is_demo == 'true' %}<span class="demo-badge"><i class="fas fa-play-circle"></i> Demo</span>{% endif %}
+                            </div>
+                            <div class="video-info">
+                                <h4>{{ video.title }}</h4>
+                                <div class="video-meta"><span><i class="fas fa-folder"></i> {{ video.folder_name }}</span></div>
+                                <div class="video-date"><i class="fas fa-calendar-alt"></i> {{ video.video_date or 'No date' }}</div>
+                                <div class="video-resources">{% if video.notes_file %}<a href="{{ video.notes_file }}" target="_blank" class="resource-link notes" onclick="event.stopPropagation()"><i class="fas fa-file-alt"></i> Notes</a>{% endif %}{% if video.exercise_file %}<a href="{{ video.exercise_file }}" target="_blank" class="resource-link exercise" onclick="event.stopPropagation()"><i class="fas fa-tasks"></i> Exercise</a>{% endif %}{% if video.practice_file %}<a href="{{ video.practice_file }}" target="_blank" class="resource-link practice" onclick="event.stopPropagation()"><i class="fas fa-code"></i> Practice</a>{% endif %}</div>
+                            </div>
+                            <div class="video-actions"><button class="video-action-btn" onclick="event.stopPropagation();openEditVideo('{{ video.id }}','{{ video.title|e }}','{{ video.youtube_link }}','{{ video.video_date }}','{{ video.folder_id }}','{{ video.description|default('')|e }}','{{ video.notes_file|default('') }}','{{ video.exercise_file|default('') }}','{{ video.practice_file|default('') }}','{{ video.is_demo|default('false') }}')"><i class="fas fa-pen"></i></button><a href="{{ url_for('delete_video',object_id=video.id) }}" class="video-action-btn danger" onclick="event.stopPropagation();return confirm('Delete this video?')"><i class="fas fa-trash"></i></a></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}<div class="empty-state"><div class="empty-icon"><i class="fas fa-video"></i></div><h3>No videos</h3><p>Click "Add Video" to upload content for students.</p></div>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ANNOUNCEMENTS -->
+        <div class="section-content {% if active_tab=='announcements' %}active{% endif %}" id="tab-announcements">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3><i class="fab fa-whatsapp"></i> Announcements (WhatsApp Style)</h3>
+                    <button class="btn btn-primary btn-sm" onclick="openModal('addAnnouncementModal')"><i class="fas fa-plus"></i> New Announcement</button>
+                </div>
+                {% if announcements and announcements|length > 0 %}
+                <div class="announcements-list" style="padding:20px">{% for ann in announcements %}<div class="wa-message"><div class="wa-header"><div class="wa-avatar">{% if ann.admin_avatar and ann.admin_avatar != '' %}<img src="{{ ann.admin_avatar }}" alt="Admin">{% else %}<i class="fas fa-user-shield"></i>{% endif %}</div><div class="wa-info"><h4>{{ ann.admin_name or 'Administrator' }}</h4><div class="wa-meta"><span><i class="fas fa-calendar-alt"></i> {{ format_date(ann.created_at) if ann.created_at else 'Just now' }}</span><span class="wa-batch {% if ann.batch == 'all' %}all{% else %}specific{% endif %}"><i class="fas fa-users"></i> {% if ann.batch == 'all' %}All Batches{% else %}{{ ann.batch }}{% endif %}</span></div></div><div class="wa-footer"><button class="btn btn-ghost btn-icon btn-sm" onclick='openEditAnnouncement("{{ ann.id }}","{{ ann.title|e }}","{{ ann.message|e }}","{{ ann.batch|default('all') }}")'><i class="fas fa-pen"></i></button><a href="{{ url_for('delete_announcement',object_id=ann.id) }}" class="btn btn-danger btn-icon btn-sm" onclick="return confirm('Delete this announcement?')"><i class="fas fa-trash"></i></a></div></div><div class="wa-content"><div class="wa-title">{{ ann.title }}</div><div class="wa-text">{{ ann.message }}</div></div>{% if ann.attachment_url and ann.attachment_url != '' %}<div class="wa-attachment" onclick="window.open('{{ ann.attachment_url }}','_blank')">{% set file_ext = ann.attachment_type or ann.attachment_url.split('.')[-1].lower() if '.' in ann.attachment_url else 'file' %}<i class="fas fa-{% if file_ext in ['pdf'] %}file-pdf{% elif file_ext in ['doc','docx'] %}file-word{% elif file_ext in ['xls','xlsx'] %}file-excel{% elif file_ext in ['jpg','jpeg','png','gif','webp'] %}file-image{% else %}file-alt{% endif %}"></i><div class="wa-attachment-info"><div class="att-name">{{ ann.attachment_name or 'Download' }}</div><div class="att-size">Click to download/view</div></div><i class="fas fa-download" style="color:var(--accent-tertiary)"></i></div>{% endif %}{% if ann.link_url and ann.link_url != '' %}<a href="{{ ann.link_url }}" target="_blank" class="wa-link" onclick="event.stopPropagation()"><i class="fas fa-link"></i><div class="wa-link-info"><div class="link-title">{{ ann.link_text or 'Click here to open link' }}</div><div class="link-url">{{ ann.link_url[:50] }}{% if ann.link_url|length > 50 %}...{% endif %}</div></div><i class="fas fa-external-link-alt" style="color:var(--accent-glow)"></i></a>{% endif %}</div>{% endfor %}</div>
+                {% else %}<div class="empty-state"><div class="empty-icon"><i class="fas fa-bullhorn"></i></div><h3>No announcements</h3><p>Create announcements for students (WhatsApp style with attachments).</p></div>{% endif %}
+            </div>
+        </div>
+
+        <!-- ANALYTICS -->
+        <div class="section-content {% if active_tab=='analytics' %}active{% endif %}" id="tab-analytics">
+            <div class="stats-grid"><div class="stat-card"><div class="stat-icon icon-indigo"><i class="fas fa-users"></i></div><div class="stat-value">{{ total_students|default(0) }}</div><div class="stat-label">Total</div></div><div class="stat-card"><div class="stat-icon icon-emerald"><i class="fas fa-user-check"></i></div><div class="stat-value">{{ approved_students|default(0) }}</div><div class="stat-label">Approved</div></div><div class="stat-card"><div class="stat-icon icon-amber"><i class="fas fa-clock"></i></div><div class="stat-value">{{ pending_students|default(0) }}</div><div class="stat-label">Pending</div></div><div class="stat-card"><div class="stat-icon icon-purple"><i class="fas fa-layer-group"></i></div><div class="stat-value">{{ total_batches|default(0) }}</div><div class="stat-label">Batches</div></div><div class="stat-card"><div class="stat-icon icon-cyan"><i class="fas fa-folder"></i></div><div class="stat-value">{{ total_folders|default(0) }}</div><div class="stat-label">Folders</div></div><div class="stat-card"><div class="stat-icon icon-indigo"><i class="fas fa-video"></i></div><div class="stat-value">{{ total_videos|default(0) }}</div><div class="stat-label">Videos</div></div><div class="stat-card"><div class="stat-icon icon-emerald"><i class="fas fa-fire"></i></div><div class="stat-value">{{ average_streak|default(0) }}</div><div class="stat-label">Avg Streak</div></div><div class="stat-card"><div class="stat-icon icon-amber"><i class="fas fa-trophy"></i></div><div class="stat-value" style="font-size:13px">{{ most_active_batch|default('N/A') }}</div><div class="stat-label">Top Batch</div></div></div>
+            <div class="charts-grid"><div class="chart-card"><h4>Student Growth</h4><div class="chart-wrap"><canvas id="chartAnalyticsGrowth"></canvas></div></div><div class="chart-card"><h4>Batch Distribution</h4><div class="chart-wrap"><canvas id="chartBatchDist"></canvas></div></div></div>
+        </div>
+    </div>
+    <div class="admin-footer"><span>Slokam Technology Admin Portal</span>&nbsp;|&nbsp;<span>&copy; 2026 Slokam Technology. All Rights Reserved.</span></div>
+</div>
+
+<!-- YOUTUBE STYLE VIDEO PLAYER FOR ADMIN -->
+<div class="video-player-page" id="videoPlayerPage">
+    <div class="vp-topbar">
+        <button class="vp-back" onclick="closeVideoPlayerAdmin()"><i class="fas fa-arrow-left"></i> <span>Back</span></button>
+        <span class="vp-title" id="vpPlayerTitle">Video Player</span>
+        <div class="vp-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="vpSearchInput" placeholder="Search in playlist..." onkeyup="filterPlaylistAdmin()">
+        </div>
+    </div>
+    <div class="vp-body">
+        <div class="vp-main">
+            <div class="vp-video-container">
+                <div class="vp-video-wrapper">
+                    <iframe id="vpPlayerIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+                </div>
+                <div class="vp-video-info">
+                    <h2 class="vp-video-title" id="vpPlayerVideoTitle">Select a video to play</h2>
+                    <div class="vp-video-meta">
+                        <span><i class="fas fa-folder"></i> <span id="vpPlayerFolder">-</span></span>
+                        <span><i class="fas fa-calendar-alt"></i> <span id="vpPlayerDate">-</span></span>
+                    </div>
+                </div>
+                <div class="vp-description-section">
+                    <h4><i class="fas fa-align-left"></i> Description</h4>
+                    <p id="vpPlayerDesc">No description available.</p>
+                </div>
+                <div class="vp-resources-section">
+                    <h4><i class="fas fa-download"></i> Resources & Downloads</h4>
+                    <div class="resources-grid" id="vpPlayerResources"></div>
+                </div>
+            </div>
+        </div>
+        <div class="vp-sidebar">
+            <div class="vp-sidebar-header">
+                <h3><i class="fas fa-list"></i> Playlist <span id="playlistCount"></span></h3>
+            </div>
+            <div class="vp-playlist" id="vpPlaylist"></div>
+        </div>
+    </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="profileModal"><div class="modal-dialog"><button class="modal-close" onclick="closeModal('profileModal')"><i class="fas fa-times"></i></button><h2>Admin Profile</h2><p class="modal-subtitle">Manage your profile settings</p><div class="profile-avatar-upload"><div class="profile-avatar-preview" id="profileAvatarPreview">{% if admin_avatar %}<img src="{{ admin_avatar }}" alt="Avatar">{% else %}{{ admin_name[0].upper() if admin_name else 'A' }}{% endif %}</div></div><form action="{{ url_for('admin_upload_avatar') }}" method="POST" enctype="multipart/form-data"><div class="form-group"><label>Upload Photo</label><input type="file" name="avatar" accept="image/*"></div><button type="submit" class="btn btn-primary" style="width:100%;justify-content:center"><i class="fas fa-upload"></i> Upload</button></form><hr style="border-color:var(--border-subtle);margin:16px 0"><form action="{{ url_for('admin_update_profile') }}" method="POST"><div class="form-group"><label>Display Name</label><input type="text" name="admin_name" value="{{ admin_name or 'Administrator' }}" required></div><div class="form-group"><label>Email</label><input type="email" value="{{ admin_email or '' }}" disabled style="opacity:0.6"></div><button type="submit" class="btn btn-primary" style="width:100%;justify-content:center"><i class="fas fa-save"></i> Update Profile</button></form></div></div>
+
+<div class="modal-overlay" id="addFolderModal"><div class="modal-dialog"><button class="modal-close" onclick="closeModal('addFolderModal')"><i class="fas fa-times"></i></button><h2>Add Folder</h2><form action="{{ url_for('add_folder') }}" method="POST"><div class="form-group"><label>Folder Name</label><input type="text" name="folder_name" required></div><div class="form-group"><label>Folder Date</label><input type="date" name="folder_date"></div><div class="form-actions"><button type="button" class="btn btn-outline" onclick="closeModal('addFolderModal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form></div></div>
+
+<div class="modal-overlay" id="editFolderModal"><div class="modal-dialog"><button class="modal-close" onclick="closeModal('editFolderModal')"><i class="fas fa-times"></i></button><h2>Edit Folder</h2><form id="editFolderForm" method="POST"><div class="form-group"><label>Folder Name</label><input type="text" name="folder_name" id="editFolderName" required></div><div class="form-group"><label>Folder Date</label><input type="date" name="folder_date" id="editFolderDate"></div><div class="form-actions"><button type="button" class="btn btn-outline" onclick="closeModal('editFolderModal')">Cancel</button><button type="submit" class="btn btn-primary">Update</button></div></form></div></div>
+
+<div class="modal-overlay" id="addVideoModal"><div class="modal-dialog modal-lg"><button class="modal-close" onclick="closeModal('addVideoModal')"><i class="fas fa-times"></i></button><h2>Add Video</h2><form action="{{ url_for('add_video') }}" method="POST" enctype="multipart/form-data"><div class="form-row"><div class="form-group"><label>Title</label><input type="text" name="title" required></div><div class="form-group"><label>Date</label><input type="date" name="video_date"></div></div><div class="form-group"><label>YouTube Link</label><input type="url" name="youtube_link" required></div><div class="form-group"><label>Folder</label><select name="folder_id" required><option value="">Select</option>{% if folders %}{% for f in folders %}<option value="{{ f.id }}">{{ f.folder_name }}</option>{% endfor %}{% endif %}</select></div><div class="form-group"><label>Description</label><textarea name="description" placeholder="Brief description..."></textarea></div><div class="form-row"><div class="form-group"><label>Notes (File)</label><input type="file" name="notes_file"><p class="text-muted">OR</p><label>Notes (Drive Link)</label><input type="url" name="notes_link" placeholder="https://drive.google.com/..."></div><div class="form-group"><label>Exercises (File)</label><input type="file" name="exercise_file"><p class="text-muted">OR</p><label>Exercises (Drive Link)</label><input type="url" name="exercise_link" placeholder="https://drive.google.com/..."></div></div><div class="form-row"><div class="form-group"><label>Practice (File)</label><input type="file" name="practice_file"><p class="text-muted">OR</p><label>Practice (Drive Link)</label><input type="url" name="practice_link" placeholder="https://drive.google.com/..."></div><div class="form-group"><label class="checkbox-label"><input type="checkbox" name="is_demo" value="true"> Make available for Demo Portal</label></div></div><div class="form-actions"><button type="button" class="btn btn-outline" onclick="closeModal('addVideoModal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form></div></div>
+
+<div class="modal-overlay" id="editVideoModal"><div class="modal-dialog modal-lg"><button class="modal-close" onclick="closeModal('editVideoModal')"><i class="fas fa-times"></i></button><h2>Edit Video</h2><form id="editVideoForm" method="POST" enctype="multipart/form-data"><div class="form-row"><div class="form-group"><label>Title</label><input type="text" name="title" id="editVideoTitle" required></div><div class="form-group"><label>Date</label><input type="date" name="video_date" id="editVideoDate"></div></div><div class="form-group"><label>YouTube Link</label><input type="url" name="youtube_link" id="editVideoLink" required></div><div class="form-group"><label>Folder</label><select name="folder_id" id="editVideoFolder" required><option value="">Select</option>{% if folders %}{% for f in folders %}<option value="{{ f.id }}">{{ f.folder_name }}</option>{% endfor %}{% endif %}</select></div><div class="form-group"><label>Description</label><textarea name="description" id="editVideoDescription"></textarea></div><div class="form-row"><div class="form-group"><label>Notes (File)</label><input type="file" name="notes_file"><p class="text-muted">Current: <span id="currentNotes"></span></p><label>Notes (Drive Link)</label><input type="url" name="notes_link" id="editNotesLink"></div><div class="form-group"><label>Exercises (File)</label><input type="file" name="exercise_file"><p class="text-muted">Current: <span id="currentExercises"></span></p><label>Exercises (Drive Link)</label><input type="url" name="exercise_link" id="editExerciseLink"></div></div><div class="form-row"><div class="form-group"><label>Practice (File)</label><input type="file" name="practice_file"><p class="text-muted">Current: <span id="currentPractice"></span></p><label>Practice (Drive Link)</label><input type="url" name="practice_link" id="editPracticeLink"></div><div class="form-group"><label class="checkbox-label"><input type="checkbox" name="is_demo" value="true" id="editIsDemo"> Make available for Demo Portal</label></div></div><div class="form-actions"><button type="button" class="btn btn-outline" onclick="closeModal('editVideoModal')">Cancel</button><button type="submit" class="btn btn-primary">Update</button></div></form></div></div>
+
+<div class="modal-overlay" id="addAnnouncementModal"><div class="modal-dialog modal-lg"><button class="modal-close" onclick="closeModal('addAnnouncementModal')"><i class="fas fa-times"></i></button><h2><i class="fab fa-whatsapp"></i> New Announcement (WhatsApp Style)</h2><p class="modal-subtitle">Create an announcement with optional file attachment or link</p><form action="{{ url_for('add_announcement') }}" method="POST" enctype="multipart/form-data"><div class="form-group"><label>Title *</label><input type="text" name="title" placeholder="Announcement title" required></div><div class="form-group"><label>Message *</label><textarea name="message" placeholder="Write your announcement message here..." required rows="4"></textarea></div><div class="form-group"><label>Target Batch</label><select name="target_batch"><option value="all">All Batches</option>{% if batches %}{% for b in batches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}{% endif %}</select></div><div class="form-row"><div class="form-group"><label>📎 File Attachment (PDF, Word, Image, etc.)</label><input type="file" name="attachment" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.xls,.xlsx,.txt,.ppt,.pptx"><small class="text-muted" style="display:block; margin-top:5px;">Max file size: 50MB</small></div><div class="form-group"><label>🔗 OR Add a Web Link</label><input type="url" name="link_url" placeholder="https://example.com/document"><input type="text" name="link_text" placeholder="Link text (optional)" style="margin-top:8px"></div></div><div class="form-actions"><button type="button" class="btn btn-outline" onclick="closeModal('addAnnouncementModal')">Cancel</button><button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send Announcement</button></div></form></div></div>
+
+<div class="modal-overlay" id="editAnnouncementModal"><div class="modal-dialog"><button class="modal-close" onclick="closeModal('editAnnouncementModal')"><i class="fas fa-times"></i></button><h2>Edit Announcement</h2><form id="editAnnouncementForm" method="POST"><div class="form-group"><label>Title</label><input type="text" name="title" id="editAnnTitle" required></div><div class="form-group"><label>Message</label><textarea name="message" id="editAnnMessage" required rows="4"></textarea></div><div class="form-group"><label>Target Batch</label><select name="target_batch" id="editAnnBatch"><option value="all">All Batches</option>{% if batches %}{% for b in batches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}{% endif %}</select></div><div class="form-actions"><button type="button" class="btn btn-outline" onclick="closeModal('editAnnouncementModal')">Cancel</button><button type="submit" class="btn btn-primary">Update</button></div></form></div></div>
+
+<div class="modal-overlay" id="studentDetailModal"><div class="modal-dialog modal-lg"><button class="modal-close" onclick="closeModal('studentDetailModal')"><i class="fas fa-times"></i></button><h2>Student Details</h2><div style="text-align:center;margin-bottom:20px"><div class="student-avatar-large" id="detAvatar">S</div></div><div class="student-detail-full"><div><strong>Student ID</strong><span id="detStudentId">-</span></div><div><strong>Full Name</strong><span id="detName">-</span></div><div><strong>Email</strong><span id="detEmail">-</span></div><div><strong>Batch</strong><span id="detBatch">-</span></div><div><strong>Joined Month</strong><span id="detJoined">-</span></div><div><strong>Status</strong><span id="detStatus">-</span></div><div><strong>Login Streak</strong><span id="detStreak">-</span></div><div><strong>Mobile Number</strong><span id="detMobile">-</span></div><div><strong>Parent Mobile</strong><span id="detParentMobile">-</span></div><div><strong>College Name</strong><span id="detCollege">-</span></div><div><strong>Qualification</strong><span id="detQualification">-</span></div><div><strong>Passed Out Year</strong><span id="detPassedOut">-</span></div><div><strong>Registered</strong><span id="detCreated">-</span></div></div><div class="form-actions"><a href="#" class="btn btn-success" id="detApproveBtn"><i class="fas fa-check"></i> Approve</a><a href="#" class="btn btn-danger" id="detRejectBtn"><i class="fas fa-times"></i> Reject</a></div></div></div>
+
+<div class="modal-overlay" id="editStudentModal"><div class="modal-dialog"><button class="modal-close" onclick="closeModal('editStudentModal')"><i class="fas fa-times"></i></button><h2>Edit Student</h2><form id="editStudentForm" method="POST"><div class="form-group"><label>Full Name</label><input type="text" name="fullname" id="editFullname" required></div><div class="form-group"><label>Email</label><input type="email" name="email" id="editEmail" required></div><div class="form-group"><label>Joined Month</label><input type="text" name="joined_month" id="editJoinedMonth" placeholder="e.g., May 2026" required></div><div class="form-group"><label>Status</label><select name="status" id="editStatus"><option value="approved">Approved</option><option value="pending">Pending</option></select></div><p class="text-muted"><i class="fas fa-info-circle"></i> Batch auto-assigned based on joined month.</p><div class="form-actions"><button type="button" class="btn btn-outline" onclick="closeModal('editStudentModal')">Cancel</button><button type="submit" class="btn btn-primary">Update</button></div></form></div></div>
+
+<script>
+// Store all videos for admin
+let allAdminVideos = [];
+let currentPlaylist = [];
+let currentVideoIndex = 0;
+
+function switchTab(tab){
+    document.querySelectorAll('.section-content').forEach(s=>s.classList.remove('active'));
+    const el=document.getElementById('tab-'+tab);
+    if(el){
+        el.classList.add('active');
+        el.style.animation='none';
+        el.offsetHeight;
+        el.style.animation='fadeUp 0.4s ease';
+    }
+    const folderVideosEl = document.getElementById('section-folder-videos');
+    if(tab === 'folder-videos' && folderVideosEl){
+        folderVideosEl.classList.add('active');
+    }
+    document.querySelectorAll('.sidebar-nav a').forEach(a=>a.classList.remove('active'));
+    const link=document.querySelector(`.sidebar-nav a[onclick="switchTab('${tab}')"]`);
+    if(link)link.classList.add('active');
+    const titles={dashboard:'Dashboard',students:'Student Management',batches:'Batch Management',folders:'Folder Management',videos:'Video Management',announcements:'Announcements',analytics:'Analytics','folder-videos':'Folder Videos'};
+    document.getElementById('topbarTitle').textContent=titles[tab]||'Admin Portal';
+    closeSidebar();
+}
+
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('mobile-open');document.getElementById('sidebarOverlay').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active')}
+function toggleProfileDropdown(){document.getElementById('profileDropdown').classList.toggle('show')}
+document.addEventListener('click',function(e){if(!e.target.closest('.profile-dropdown'))document.getElementById('profileDropdown').classList.remove('show')})
+
+function openModal(id){document.getElementById(id).classList.add('active');document.body.style.overflow='hidden'}
+function closeModal(id){document.getElementById(id).classList.remove('active');document.body.style.overflow=''}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)closeModal(this.id)}))
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){document.querySelectorAll('.modal-overlay.active').forEach(m=>m.classList.remove('active'));if(document.getElementById('videoPlayerPage').classList.contains('active')) closeVideoPlayerAdmin();document.body.style.overflow=''}})
+
+function getYouTubeId(url){if(!url)return'';if(url.includes('youtu.be/'))return url.split('youtu.be/')[1].split(/[?&#]/)[0];if(url.includes('watch?v='))return url.split('watch?v=')[1].split('&')[0];if(url.includes('embed/'))return url.split('embed/')[1].split(/[?&#]/)[0];if(url.includes('shorts/'))return url.split('shorts/')[1].split(/[?&#]/)[0];return''}
+function getYouTubeEmbed(url){const id=getYouTubeId(url);return id?'https://www.youtube.com/embed/'+id+'?rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=1&cc_load_policy=1':''}
+function escapeHtml(str){if(!str)return'';return str.replace(/[&<>]/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';return m})}
+
+document.addEventListener('DOMContentLoaded',function(){
+    allAdminVideos = {% if videos %}{{ videos|tojson|safe }}{% else %}[]{% endif %};
+    document.querySelectorAll('.flash-message').forEach(m=>{setTimeout(()=>{m.style.opacity='0';m.style.transform='translateX(120%)';setTimeout(()=>m.remove(),400)},4000)});
+});
+
+function openFolderVideos(folderId, folderName){
+    const folderVideos = allAdminVideos.filter(v => v.folder_id === folderId);
+    document.getElementById('folderVideoTitle').innerHTML = `${folderName} <span style="background:rgba(99,102,241,0.15); padding:4px 12px; border-radius:20px; font-size:11px; margin-left:10px;"><i class="fas fa-video"></i> ${folderVideos.length} Videos</span>`;
+    const videoList = document.getElementById('folderVideoList');
+    if(folderVideos.length > 0){
+        videoList.innerHTML = `<div class="videos-grid">${folderVideos.map(v => {const ytId = getYouTubeId(v.youtube_link || '');const thumbHtml = ytId ? `<iframe src="https://www.youtube.com/embed/${ytId}?controls=0&modestbranding=1"></iframe>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)"><i class="fas fa-play"></i></div>';return `<div class="video-card" onclick='openVideoPlayerAdmin("${escapeHtml(v.youtube_link)}","${escapeHtml(v.title)}","${escapeHtml(v.folder_name)}","${escapeHtml(v.description||'')}","${escapeHtml(v.notes_file||'')}","${escapeHtml(v.exercise_file||'')}","${escapeHtml(v.practice_file||'')}","${v.video_date||''}","${folderId}")'><div class="video-thumb">${thumbHtml}<div class="play-overlay"><i class="fas fa-play-circle"></i></div>${v.is_demo === 'true' ? '<span class="demo-badge"><i class="fas fa-play-circle"></i> Demo</span>' : ''}</div><div class="video-info"><h4>${escapeHtml(v.title)}</h4><div class="video-meta"><span><i class="fas fa-folder"></i> ${escapeHtml(v.folder_name)}</span></div><div class="video-date"><i class="fas fa-calendar-alt"></i> ${v.video_date || 'No date'}</div><div class="video-resources">${v.notes_file ? `<a href="${escapeHtml(v.notes_file)}" target="_blank" class="resource-link notes" onclick="event.stopPropagation()"><i class="fas fa-file-alt"></i> Notes</a>` : ''}${v.exercise_file ? `<a href="${escapeHtml(v.exercise_file)}" target="_blank" class="resource-link exercise" onclick="event.stopPropagation()"><i class="fas fa-tasks"></i> Exercise</a>` : ''}${v.practice_file ? `<a href="${escapeHtml(v.practice_file)}" target="_blank" class="resource-link practice" onclick="event.stopPropagation()"><i class="fas fa-code"></i> Practice</a>` : ''}</div></div><div class="video-actions"><button class="video-action-btn" onclick="event.stopPropagation();openEditVideo('${v.id}','${escapeHtml(v.title)}','${escapeHtml(v.youtube_link)}','${v.video_date}','${v.folder_id}','${escapeHtml(v.description||'')}','${escapeHtml(v.notes_file||'')}','${escapeHtml(v.exercise_file||'')}','${escapeHtml(v.practice_file||'')}','${v.is_demo||'false'}')"><i class="fas fa-pen"></i></button><a href="/admin/delete-video/${v.id}" class="video-action-btn danger" onclick="event.stopPropagation();return confirm('Delete this video?')"><i class="fas fa-trash"></i></a></div></div>`}).join('')}</div>`;
+    } else {
+        videoList.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fas fa-video"></i></div><p>No videos in this folder. Click "Add Video" to add content.</p></div>';
+    }
+    switchTab('folder-videos');
+}
+
+function openVideoPlayerAdmin(link, title, folder, desc, notes, exercises, practice, videoDate, folderId){
+    const folderVideos = allAdminVideos.filter(v => v.folder_id === folderId);
+    currentPlaylist = folderVideos.length > 0 ? folderVideos : allAdminVideos;
+    currentVideoIndex = currentPlaylist.findIndex(v => v.youtube_link === link);
+    if(currentVideoIndex < 0) currentVideoIndex = 0;
+    playVideoAtIndexAdmin(currentVideoIndex);
+    document.getElementById('videoPlayerPage').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function playVideoAtIndexAdmin(index){
+    if(index < 0 || index >= currentPlaylist.length) return;
+    currentVideoIndex = index;
+    const video = currentPlaylist[index];
+    document.getElementById('vpPlayerIframe').src = getYouTubeEmbed(video.youtube_link || '');
+    document.getElementById('vpPlayerTitle').textContent = video.title;
+    document.getElementById('vpPlayerVideoTitle').textContent = video.title;
+    document.getElementById('vpPlayerFolder').textContent = video.folder_name || 'Course';
+    document.getElementById('vpPlayerDate').textContent = video.video_date || 'No date';
+    document.getElementById('vpPlayerDesc').textContent = video.description || 'No description available.';
+    
+    const resourcesDiv = document.getElementById('vpPlayerResources');
+    let hasResources = false;
+    let resourcesHtml = '';
+    if(video.notes_file && video.notes_file !== ''){
+        resourcesHtml += `<div class="resource-card notes" onclick="window.open('${escapeHtml(video.notes_file)}','_blank')"><i class="fas fa-file-alt"></i><span>Notes</span></div>`;
+        hasResources = true;
+    }
+    if(video.exercise_file && video.exercise_file !== ''){
+        resourcesHtml += `<div class="resource-card exercise" onclick="window.open('${escapeHtml(video.exercise_file)}','_blank')"><i class="fas fa-tasks"></i><span>Exercises</span></div>`;
+        hasResources = true;
+    }
+    if(video.practice_file && video.practice_file !== ''){
+        resourcesHtml += `<div class="resource-card practice" onclick="window.open('${escapeHtml(video.practice_file)}','_blank')"><i class="fas fa-code"></i><span>Practice Problems</span></div>`;
+        hasResources = true;
+    }
+    resourcesDiv.innerHTML = hasResources ? resourcesHtml : '<p style="color:var(--text-muted);font-size:12px">No resources available.</p>';
+    renderPlaylistAdmin();
+}
+
+function renderPlaylistAdmin(){
+    const pl = document.getElementById('vpPlaylist');
+    document.getElementById('playlistCount').textContent = `(${currentPlaylist.length} videos)`;
+    if(currentPlaylist.length === 0){
+        pl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">No videos in playlist.</div>';
+        return;
+    }
+    pl.innerHTML = currentPlaylist.map((v,i) => {
+        const ytId = getYouTubeId(v.youtube_link || '');
+        const thumb = ytId ? `<div class="playlist-thumb"><iframe src="https://www.youtube.com/embed/${ytId}?controls=0&modestbranding=1"></iframe></div>` : '<div class="playlist-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-secondary)"><i class="fas fa-play"></i></div>';
+        return `<div class="vp-playlist-item${i === currentVideoIndex ? ' active' : ''}" onclick="playVideoAtIndexAdmin(${i})">${thumb}<div class="playlist-info"><div class="playlist-title">${i+1}. ${escapeHtml(v.title)}</div><div class="playlist-folder"><i class="fas fa-folder"></i> ${escapeHtml(v.folder_name || 'Course')}</div><div class="playlist-date"><i class="fas fa-calendar-alt"></i> ${v.video_date || 'No date'}</div></div></div>`;
+    }).join('');
+}
+
+function filterPlaylistAdmin(){
+    const searchTerm = document.getElementById('vpSearchInput').value.toLowerCase();
+    const playlistItems = document.querySelectorAll('.vp-playlist-item');
+    playlistItems.forEach(item => {
+        const title = item.querySelector('.playlist-title')?.textContent.toLowerCase() || '';
+        if(title.includes(searchTerm)){
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function closeVideoPlayerAdmin(){
+    document.getElementById('vpPlayerIframe').src = '';
+    document.getElementById('videoPlayerPage').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function viewStudentDetail(oid,sid,name,email,batch,joined,status,streak,created,mobile,parent_mobile,college,qualification,passed_out_year,avatar){
+    document.getElementById('detStudentId').textContent=sid||'-';document.getElementById('detName').textContent=name||'-';
+    document.getElementById('detEmail').textContent=email||'-';document.getElementById('detBatch').textContent=batch||'-';
+    document.getElementById('detJoined').textContent=joined||'-';document.getElementById('detStatus').textContent=status||'-';
+    document.getElementById('detStreak').textContent=streak||'0';document.getElementById('detMobile').textContent=mobile||'-';
+    document.getElementById('detParentMobile').textContent=parent_mobile||'-';document.getElementById('detCollege').textContent=college||'-';
+    document.getElementById('detQualification').textContent=qualification||'-';document.getElementById('detPassedOut').textContent=passed_out_year||'-';
+    if(created&&created!=='None'){document.getElementById('detCreated').textContent=created.substring(0,10)}else{document.getElementById('detCreated').textContent='-'}
+    const avatarDiv = document.getElementById('detAvatar');
+    if(avatar && avatar !== ''){
+        avatarDiv.innerHTML = `<img src="${avatar}" style="width:100%;height:100%;object-fit:cover">`;
+    } else {
+        avatarDiv.innerHTML = name ? name[0].toUpperCase() : 'S';
+        avatarDiv.style.background = 'linear-gradient(135deg,var(--accent),var(--accent-secondary))';
+    }
+    document.getElementById('detApproveBtn').href='/approve/'+oid;document.getElementById('detRejectBtn').href='/reject/'+oid;openModal('studentDetailModal')
+}
+function openEditStudent(oid,name,email,batch,joined,status){document.getElementById('editFullname').value=name;document.getElementById('editEmail').value=email;document.getElementById('editJoinedMonth').value=joined||'';document.getElementById('editStatus').value=status;document.getElementById('editStudentForm').action='/admin/student/edit/'+oid;openModal('editStudentModal')}
+function openEditFolder(oid,name,date){document.getElementById('editFolderName').value=name;document.getElementById('editFolderDate').value=date;document.getElementById('editFolderForm').action='/admin/edit-folder/'+oid;openModal('editFolderModal')}
+function openEditVideo(oid,title,link,date,folderId,desc,notes,exercises,practice,isDemo){document.getElementById('editVideoTitle').value=title;document.getElementById('editVideoLink').value=link;document.getElementById('editVideoDate').value=date;document.getElementById('editVideoFolder').value=folderId;document.getElementById('editVideoDescription').value=desc||'';document.getElementById('currentNotes').textContent=notes?notes.substring(0,50)+'...':'(none)';document.getElementById('currentExercises').textContent=exercises?exercises.substring(0,50)+'...':'(none)';document.getElementById('currentPractice').textContent=practice?practice.substring(0,50)+'...':'(none)';document.getElementById('editNotesLink').value=notes||'';document.getElementById('editExerciseLink').value=exercises||'';document.getElementById('editPracticeLink').value=practice||'';document.getElementById('editIsDemo').checked=(isDemo==='true'||isDemo===true);document.getElementById('editVideoForm').action='/admin/edit-video/'+oid;openModal('editVideoModal')}
+function openEditAnnouncement(oid,title,message,batch){document.getElementById('editAnnTitle').value=title;document.getElementById('editAnnMessage').value=message;document.getElementById('editAnnBatch').value=batch||'all';document.getElementById('editAnnouncementForm').action='/admin/edit-announcement/'+oid;openModal('editAnnouncementModal')}
+function viewBatchStudents(batchName){document.getElementById('batchFilter').value=batchName;document.getElementById('statusFilter').value='';switchTab('students');filterStudentTable()}
+function filterStudentTable(){const search=document.getElementById('studentSearch').value.toLowerCase();const batch=document.getElementById('batchFilter').value;const status=document.getElementById('statusFilter').value;document.querySelectorAll('#studentTable tbody tr').forEach(row=>{const text=row.textContent.toLowerCase();const rBatch=row.cells[4]?.textContent||'';const rStatus=row.cells[6]?.textContent.trim()||'';let show=true;if(search&&!text.includes(search))show=false;if(batch&&rBatch!==batch)show=false;if(status&&rStatus!==status)show=false;row.style.display=show?'':'none'})}
+
+const ts={{ total_students|default(0)|int }};
+function ic(id,type,labels,data,color){const ctx=document.getElementById(id);if(!ctx)return;new Chart(ctx,{type,data:{labels,datasets:[{data,borderColor:color,backgroundColor:type==='line'?'rgba(99,102,241,0.06)':color,fill:type==='line',tension:0.4,borderWidth:2,pointBackgroundColor:color,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8'}}},scales:type!=='doughnut'?{x:{ticks:{color:'#64748b'},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#64748b'},grid:{color:'rgba(255,255,255,0.03)'}}}:{}}})}
+if(ts>0){ic('chartStudentGrowth','line',['J','F','M','A','M','J','J','A','S','O','N','D'],[Math.round(ts*.05),Math.round(ts*.12),Math.round(ts*.2),Math.round(ts*.3),Math.round(ts*.45),Math.round(ts*.55),Math.round(ts*.65),Math.round(ts*.72),Math.round(ts*.8),Math.round(ts*.88),Math.round(ts*.93),ts],'#818cf8');ic('chartAnalyticsGrowth','line',['Jan','Mar','May','Jul','Sep','Nov'],[Math.round(ts*.08),Math.round(ts*.25),Math.round(ts*.45),Math.round(ts*.65),Math.round(ts*.82),ts],'#34d399');ic('chartBatchDist','doughnut',['Batch A','Batch B','Batch C','Batch D'],[Math.round(ts*.35),Math.round(ts*.3),Math.round(ts*.2),Math.round(ts*.15)],'#818cf8')}
+</script>
+</body>
+</html>

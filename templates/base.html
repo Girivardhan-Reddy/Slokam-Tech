@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="description" content="Slokam Technologies - Learn. Practice. Build. Grow. Premier LMS for technical education with expert-led training, practice problems, and certification.">
+    <meta name="theme-color" content="#000000">
+    <title>Slokam Technologies | Learn. Practice. Build. Grow.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-deep: #000;
+            --bg-primary: #030712;
+            --bg-secondary: #0a0f1a;
+            --bg-card: #0d1525;
+            --bg-card-hover: #111b2e;
+            --border-subtle: rgba(255, 255, 255, 0.04);
+            --border-medium: rgba(255, 255, 255, 0.08);
+            --accent: #6366f1;
+            --accent-glow: #818cf8;
+            --accent-secondary: #a855f7;
+            --accent-tertiary: #06b6d4;
+            --gold: #f59e0b;
+            --gold-glow: #fbbf24;
+            --white: #fff;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --success-glow: #34d399;
+            --error: #ef4444;
+            --error-glow: #f87171;
+            --warning: #f59e0b;
+            --radius-sm: 12px;
+            --radius: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+            --radius-full: 9999px;
+            --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
+            --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 20px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+            --transition-out: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-bounce: 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            --font-sans: 'Inter', sans-serif;
+            --font-display: 'Outfit', sans-serif;
+            --font-mono: 'Space Grotesk', monospace;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            background: var(--bg-deep);
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.35;
+            animation: ambFloat 12s ease-in-out infinite;
+        }
+
+        .ambient-orb-1 {
+            width: 600px;
+            height: 600px;
+            background: var(--accent);
+            top: -20%;
+            left: -15%;
+            animation-delay: 0s;
+        }
+
+        .ambient-orb-2 {
+            width: 500px;
+            height: 500px;
+            background: var(--accent-secondary);
+            bottom: -25%;
+            right: -10%;
+            animation-delay: -5s;
+        }
+
+        .ambient-orb-3 {
+            width: 400px;
+            height: 400px;
+            background: var(--accent-tertiary);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -8s;
+            opacity: 0.18;
+        }
+
+        @keyframes ambFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(60px, -50px) scale(1.1); }
+            66% { transform: translate(-40px, 30px) scale(0.9); }
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+        }
+
+        /* Navbar */
+        .navbar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: 92%;
+            max-width: 1300px;
+            background: rgba(13, 21, 37, 0.7);
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-full);
+            padding: 6px 8px;
+            transition: all var(--transition-out);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .navbar.scrolled {
+            background: rgba(10, 15, 26, 0.85);
+            border-color: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 12px 50px rgba(0, 0, 0, 0.5);
+            width: 96%;
+        }
+
+        .navbar-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            height: 56px;
+            gap: 20px;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--white);
+            letter-spacing: -0.5px;
+            transition: var(--transition-out);
+        }
+
+        .navbar-brand:hover {
+            transform: scale(1.02);
+        }
+
+        .logo-img {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            flex-shrink: 0;
+            animation: logoPulse 3s ease-in-out infinite;
+            object-fit: cover;
+        }
+
+        @keyframes logoPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); }
+            50% { box-shadow: 0 0 40px rgba(168, 85, 247, 0.6); }
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 13px;
+            padding: 10px 16px;
+            border-radius: var(--radius-full);
+            transition: all var(--transition-out);
+            position: relative;
+            letter-spacing: 0.2px;
+        }
+
+        .nav-links a:hover {
+            color: var(--white);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 2px;
+            background: var(--accent-glow);
+            border-radius: 2px;
+            transition: width var(--transition-out);
+        }
+
+        .nav-links a:hover::after {
+            width: 50%;
+        }
+
+        .nav-buttons {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            border: none;
+            transition: all var(--transition-out);
+            font-family: var(--font-sans);
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            letter-spacing: 0.3px;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: var(--radius-full);
+            opacity: 0;
+            transition: opacity var(--transition-out);
+        }
+
+        .btn:hover::before {
+            opacity: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+            color: white;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-ghost:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-2px);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, var(--gold), #e67e00);
+            color: #1a1a1a;
+            font-weight: 700;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-gold:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(245, 158, 11, 0.5);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--accent-glow);
+            color: var(--accent-glow);
+            background: rgba(99, 102, 241, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .btn-demo {
+            background: transparent;
+            color: var(--accent-tertiary);
+            border: 2px solid var(--accent-tertiary);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+            animation: demoGlow 2s ease-in-out infinite;
+        }
+
+        .btn-demo:hover {
+            background: rgba(6, 182, 212, 0.1);
+            box-shadow: 0 0 40px rgba(6, 182, 212, 0.4);
+            transform: translateY(-2px);
+        }
+
+        @keyframes demoGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.2); }
+            50% { box-shadow: 0 0 35px rgba(6, 182, 212, 0.5); }
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .btn-lg {
+            padding: 16px 32px;
+            font-size: 16px;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: var(--radius-sm);
+            transition: var(--transition-out);
+        }
+
+        .mobile-menu-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            padding: 140px 40px 80px;
+            z-index: 1;
+        }
+
+        .hero-container {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+            width: 100%;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-content {
+            animation: fadeSlideUp 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            padding: 8px 18px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-glow);
+            margin-bottom: 32px;
+            animation: glowPulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes glowPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3); }
+            50% { box-shadow: 0 0 0 18px rgba(99, 102, 241, 0); }
+        }
+
+        .hero-badge .live-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--success-glow);
+            border-radius: 50%;
+            animation: liveBlink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes liveBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(40px, 6vw, 68px);
+            font-weight: 800;
+            line-height: 1.08;
+            color: var(--white);
+            margin-bottom: 24px;
+            letter-spacing: -1.5px;
+        }
+
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, var(--accent-glow), var(--accent-secondary), var(--accent-tertiary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% 200%;
+            animation: gradientShift 4s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            margin-bottom: 36px;
+            max-width: 500px;
+            line-height: 1.7;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .hero-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeSlideUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+        }
+
+        .hero-card {
+            width: 100%;
+            max-width: 480px;
+            background: rgba(13, 21, 37, 0.6);
+            backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-xl);
+            padding: 28px;
+            box-shadow: var(--shadow-glow);
+            position: relative;
+            transform: perspective(1000px) rotateY(-4deg) rotateX(2deg);
+            transition: all var(--transition-out);
+        }
+
+        .hero-card:hover {
+            transform: perspective(1000px) rotateY(-1deg) rotateX(0deg);
+        }
+
+        .hero-card-dots {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .hero-card-dots span {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .hero-card-dots span:nth-child(1) { background: #ff5f57; }
+        .hero-card-dots span:nth-child(2) { background: #febc2e; }
+        .hero-card-dots span:nth-child(3) { background: #28c840; }
+
+        .hero-card-line {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            margin: 14px 0;
+            overflow: hidden;
+        }
+
+        .hero-card-line-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+            border-radius: 10px;
+            width: 70%;
+            animation: linePulse 3s ease-in-out infinite;
+        }
+
+        @keyframes linePulse {
+            0%, 100% { width: 65%; }
+            50% { width: 88%; }
+        }
+
+        .hero-card-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .hero-card-stat {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: var(--radius);
+            padding: 16px;
+            text-align: center;
+        }
+
+        .hero-card-stat .val {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-glow);
+            font-family: var(--font-display);
+        }
+
+        .hero-card-stat .lbl {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Sections */
+        .section {
+            padding: 100px 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-dark {
+            background: rgba(3, 7, 18, 0.5);
+        }
+
+        .section-container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 70px;
+        }
+
+        .section-tag {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--accent-glow);
+            margin-bottom: 16px;
+            background: rgba(99, 102, 241, 0.08);
+            padding: 6px 16px;
+            border-radius: var(--radius-full);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(30px, 4vw, 48px);
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+
+        .section-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            max-width: 550px;
+            margin: 0 auto;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: rgba(13, 21, 37, 0.5);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-lg);
+            padding: 36px 28px;
+            transition: all var(--transition-out);
+            cursor: default;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), var(--accent-secondary), transparent);
+            opacity: 0;
+            transition: opacity var(--transition-out);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+            transition: all var(--transition-bounce);
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.1) rotate(-8deg);
+        }
+
+        .icon-indigo { background: rgba(99, 102, 241, 0.12); color: var(--accent-glow); }
+        .icon-purple { background: rgba(168, 85, 247, 0.12); color: var(--accent-secondary); }
+        .icon-cyan { background: rgba(6, 182, 212, 0.12); color: var(--accent-tertiary); }
+        .icon-emerald { background: rgba(16, 185, 129, 0.12); color: var(--success-glow); }
+        .icon-amber { background: rgba(245, 158, 11, 0.12); color: var(--gold-glow); }
+
+        .feature-card h3 {
+            font-family: var(--font-display);
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* About Section */
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .about-content .section-tag {
+            margin-bottom: 20px;
+        }
+
+        .about-content h2 {
+            font-family: var(--font-display);
+            font-size: clamp(28px, 4vw, 42px);
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+        }
+
+        .about-content p {
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        /* Contact Section */
+        .contact-grid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .contact-info {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .contact-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            background: rgba(13, 21, 37, 0.5);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            transition: all var(--transition-out);
+            backdrop-filter: blur(10px);
+        }
+
+        .contact-card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateX(6px);
+        }
+
+        .contact-icon-circle {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius);
+            background: rgba(99, 102, 241, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: var(--accent-glow);
+            flex-shrink: 0;
+        }
+
+        .contact-card h4 {
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 2px;
+            font-size: 14px;
+        }
+
+        .contact-card span {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .contact-card a {
+            color: var(--accent-glow);
+            text-decoration: none;
+            transition: var(--transition-out);
+        }
+
+        .contact-card a:hover {
+            text-decoration: underline;
+        }        
+        /* Footer */
+        .footer {
+            background: rgba(0, 0, 0, 0.6);
+            border-top: 1px solid var(--border-subtle);
+            padding: 60px 40px 30px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .footer-grid {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 40px;
+        }
+
+        .footer-brand h3 {
+            font-family: var(--font-display);
+            font-size: 22px;
+            color: var(--white);
+            margin-bottom: 10px;
+        }
+
+        .footer-brand p {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .footer-links h4 {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 18px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .footer-links ul {
+            list-style: none;
+        }
+
+        .footer-links ul li {
+            margin-bottom: 8px;
+        }
+
+        .footer-links ul li a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            transition: var(--transition-out);
+        }
+
+        .footer-links ul li a:hover {
+            color: var(--accent-glow);
+            padding-left: 4px;
+        }
+
+        .footer-bottom {
+            max-width: 1300px;
+            margin: 40px auto 0;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .social-links {
+            display: flex;
+            gap: 10px;
+        }
+
+        .social-links a {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.04);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 16px;
+            transition: all var(--transition-out);
+            text-decoration: none;
+        }
+
+        .social-links a:hover {
+            background: var(--accent);
+            color: white;
+            transform: translateY(-3px);
+        }
+
+        /* Modal Styles */
+        .modal-overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.85); 
+            backdrop-filter: blur(12px); 
+            z-index: 10000; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            opacity: 0; 
+            visibility: hidden; 
+            transition: all 0.35s ease; 
+            padding: 20px; 
+        }
+        
+        .modal-overlay.active { 
+            opacity: 1; 
+            visibility: visible; 
+        }
+        
+        .modal-dialog { 
+            background: linear-gradient(135deg, rgba(13, 21, 37, 0.95), rgba(3, 7, 18, 0.95));
+            border: 1px solid rgba(255,255,255,0.12); 
+            border-radius: var(--radius-xl); 
+            padding: 40px 32px; 
+            width: 100%; 
+            max-width: 700px; 
+            backdrop-filter: blur(40px); 
+            box-shadow: 0 30px 80px rgba(0,0,0,0.6); 
+            transform: translateY(30px) scale(0.94); 
+            transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1); 
+            position: relative; 
+            max-height: 88vh; 
+            overflow-y: auto; 
+        }
+        
+        .modal-dialog.modal-lg { 
+            max-width: 700px; 
+        }
+        
+        .modal-overlay.active .modal-dialog { 
+            transform: translateY(0) scale(1); 
+        }
+        
+        .modal-dialog h2 { 
+            font-family: var(--font-display); 
+            font-size: 28px; 
+            font-weight: 700; 
+            color: var(--white); 
+            margin-bottom: 8px; 
+            text-align: center; 
+        }
+        
+        .modal-subtitle { 
+            text-align: center; 
+            color: var(--text-secondary); 
+            font-size: 14px; 
+            margin-bottom: 28px; 
+        }
+        
+        .modal-close { 
+            position: absolute; 
+            top: 16px; 
+            right: 16px; 
+            width: 36px; 
+            height: 36px; 
+            border-radius: 50%; 
+            background: rgba(255,255,255,0.04); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            color: var(--text-secondary); 
+            cursor: pointer; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            transition: all var(--transition-out); 
+        }
+        
+        .modal-close:hover { 
+            background: rgba(239,68,68,0.2); 
+            color: var(--error-glow); 
+            transform: rotate(90deg);
+        }
+        
+        .modal-form .form-group { 
+            margin-bottom: 18px; 
+        }
+        
+        .modal-form .form-group label { 
+            display: block; 
+            font-size: 12px; 
+            font-weight: 600; 
+            color: var(--text-muted); 
+            margin-bottom: 8px; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+        }
+        
+        .modal-form .form-group input, 
+        .modal-form .form-group select { 
+            width: 100%; 
+            padding: 12px 16px; 
+            background: rgba(255,255,255,0.05); 
+            border: 1px solid rgba(255,255,255,0.12); 
+            border-radius: var(--radius); 
+            color: var(--white); 
+            font-size: 14px; 
+            outline: none; 
+            transition: all var(--transition-out);
+        }
+        
+        .modal-form .form-group select {
+            cursor: pointer;
+            background: rgba(10, 15, 26, 0.95);
+        }
+        
+        .modal-form .form-group select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 12px;
+        }
+        
+        .modal-form .form-group select option:hover {
+            background: var(--accent);
+        }
+        
+        .modal-form .form-group input:focus, 
+        .modal-form .form-group select:focus { 
+            border-color: var(--accent); 
+            box-shadow: 0 0 0 4px rgba(99,102,241,0.1); 
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        .modal-form .btn { 
+            width: 100%; 
+            justify-content: center; 
+            padding: 14px; 
+            font-size: 15px; 
+            margin-top: 10px; 
+        }
+        
+        .modal-footer-text { 
+            text-align: center; 
+            margin-top: 20px; 
+            font-size: 13px; 
+            color: var(--text-secondary); 
+        }
+        
+        .modal-footer-text a { 
+            color: var(--accent-glow); 
+            text-decoration: none; 
+            font-weight: 600; 
+            cursor: pointer; 
+        }
+        
+        .modal-footer-text a:hover {
+            text-decoration: underline;
+        }
+        
+        .modal-note { 
+            background: rgba(99,102,241,0.08); 
+            border: 1px solid rgba(99,102,241,0.2); 
+            border-radius: var(--radius); 
+            padding: 12px 16px; 
+            margin-bottom: 24px; 
+            font-size: 12px; 
+            color: var(--accent-glow); 
+            text-align: center; 
+        }
+        
+        .success-popup { 
+            text-align: center; 
+        }
+        
+        .success-popup .success-icon { 
+            width: 80px; 
+            height: 80px; 
+            border-radius: 50%; 
+            margin: 0 auto 20px; 
+            background: rgba(16,185,129,0.12); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 42px; 
+            color: var(--success-glow); 
+            animation: successPop 0.7s cubic-bezier(0.34,1.56,0.64,1); 
+        }
+        
+        @keyframes successPop { 
+            0% { transform: scale(0); } 
+            60% { transform: scale(1.2); } 
+            100% { transform: scale(1); } 
+        }
+        
+        .flash-container { 
+            position: fixed; 
+            top: 100px; 
+            right: 30px; 
+            z-index: 9999; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            max-width: 400px; 
+        }
+        
+        .flash-message { 
+            padding: 14px 20px; 
+            border-radius: var(--radius); 
+            font-weight: 500; 
+            font-size: 13px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            backdrop-filter: blur(30px); 
+            animation: flashSlideIn 0.4s ease, flashFadeOut 0.4s ease 3.6s forwards; 
+            box-shadow: var(--shadow-lg); 
+            border: 1px solid rgba(255,255,255,0.08); 
+        }
+        
+        .flash-message.success { 
+            background: rgba(16,185,129,0.18); 
+            color: var(--success-glow); 
+            border-color: rgba(16,185,129,0.25); 
+        }
+        
+        .flash-message.error { 
+            background: rgba(239,68,68,0.18); 
+            color: var(--error-glow); 
+            border-color: rgba(239,68,68,0.25); 
+        }
+        
+        @keyframes flashSlideIn { 
+            from { transform: translateX(120%); opacity: 0; } 
+            to { transform: translateX(0); opacity: 1; } 
+        }
+        
+        @keyframes flashFadeOut { 
+            from { transform: translateX(0); opacity: 1; } 
+            to { transform: translateX(120%); opacity: 0; } 
+        }
+        
+        @media (max-width: 1024px) { 
+            .hero-container { grid-template-columns: 1fr; text-align: center; } 
+            .hero p { margin-left: auto; margin-right: auto; } 
+            .hero-visual { display: none; } 
+            .about-grid { grid-template-columns: 1fr; } 
+            .contact-grid { grid-template-columns: 1fr; } 
+            .footer-grid { grid-template-columns: 1fr 1fr; } 
+            .form-row { grid-template-columns: 1fr; gap: 0; }
+        }
+        
+        @media (max-width: 768px) { 
+            .navbar { width: 96%; top: 10px; } 
+            .nav-links { display: none; position: fixed; top: 70px; left: 16px; right: 16px; background: rgba(13,21,37,0.98); flex-direction: column; padding: 16px; border-radius: var(--radius-lg); } 
+            .nav-links.mobile-active { display: flex; } 
+            .mobile-menu-btn { display: block; } 
+            .hero { padding: 120px 16px 60px; } 
+            .section { padding: 60px 16px; } 
+            .footer-grid { grid-template-columns: 1fr; } 
+            .modal-dialog { padding: 32px 20px; margin: 16px; }
+        }
+        
+        @media (max-width: 480px) { 
+            .hero h1 { font-size: 30px; } 
+            .hero-buttons { flex-direction: column; align-items: center; } 
+            .hero-buttons .btn { width: 100%; justify-content: center; } 
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-bg"><div class="ambient-orb ambient-orb-1"></div><div class="ambient-orb ambient-orb-2"></div><div class="ambient-orb ambient-orb-3"></div></div>
+    <div class="grid-overlay"></div>
+
+    <!-- Navbar -->
+    <nav class="navbar" id="navbar">
+        <div class="navbar-container">
+            <a href="#" class="navbar-brand">
+                <img src="https://play-lh.googleusercontent.com/_kvdk0-jX5RDlc9eW903Vx59JepDDr0skF693OEugwIHvEggcKZBPwIxjNKm576rbQ=w240-h480-rw" alt="Slokam Technologies Logo" class="logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div class="logo-hex" style="display:none; width:38px; height:38px; background:linear-gradient(135deg,var(--accent),var(--accent-secondary)); clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%); align-items:center; justify-content:center; font-size:16px; color:white"><i class="fas fa-infinity"></i></div>
+                Slokam Technologies
+            </a>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#home" onclick="closeMobileMenu()">Home</a></li>
+                <li><a href="#about" onclick="closeMobileMenu()">About</a></li>
+                <li><a href="#features" onclick="closeMobileMenu()">Features</a></li>
+                <li><a href="#contact" onclick="closeMobileMenu()">Contact</a></li>
+            </ul>
+            <div class="nav-buttons">
+                <a href="{{ url_for('demo_login') }}" class="btn btn-demo btn-sm"><i class="fas fa-play-circle"></i> <span class="btn-text">Demo</span></a>
+                <button class="btn btn-ghost btn-sm" onclick="openStudentLogin()"><i class="fas fa-sign-in-alt"></i> <span class="btn-text">Login</span></button>
+                <button class="btn btn-primary btn-sm" onclick="openRegister()"><i class="fas fa-user-plus"></i> <span class="btn-text">Register</span></button>
+                <button class="btn btn-gold btn-sm" onclick="openAdminLogin()"><i class="fas fa-shield-halved"></i> <span class="btn-text">Admin</span></button>
+                <button class="mobile-menu-btn" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    <div class="flash-container" id="flashContainer">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, msg in messages %}<div class="flash-message {{ category }}">{% if category == 'success' %}<i class="fas fa-circle-check"></i>{% elif category == 'error' %}<i class="fas fa-circle-exclamation"></i>{% else %}<i class="fas fa-circle-info"></i>{% endif %}{{ msg }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="hero-container">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="live-dot"></span>
+                    <span>✨ Live Learning Platform</span>
+                </div>
+                <h1>Master Your Skills With <span class="gradient-text">Slokam Technologies</span></h1>
+                <p>Access recorded classes, notes, exercises, practice problems and track your learning journey. Learn from industry experts and build real-world projects.</p>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary btn-lg" onclick="openRegister()"><i class="fas fa-rocket"></i> Get Started Free</button>
+                    <button class="btn btn-ghost btn-lg" onclick="openStudentLogin()"><i class="fas fa-sign-in-alt"></i> Student Login</button>
+                    <a href="{{ url_for('demo_login') }}" class="btn btn-demo btn-lg"><i class="fas fa-play-circle"></i> Try Demo</a>
+                </div>
+            </div>
+            <div class="hero-visual"><div class="hero-card"><div class="hero-card-dots"><span></span><span></span><span></span><span style="color:var(--text-muted);font-size:11px;margin-left:8px">live preview</span></div><div style="color:var(--white);font-weight:600;font-size:14px">Your Progress</div><div class="hero-card-line"><div class="hero-card-line-fill"></div></div><div style="color:var(--text-secondary);font-size:11px">82% Completed</div><div class="hero-card-grid"><div class="hero-card-stat"><div class="val">12</div><div class="lbl">Videos</div></div><div class="hero-card-stat"><div class="val">8</div><div class="lbl">Exercises</div></div><div class="hero-card-stat"><div class="val">7</div><div class="lbl">Day Streak</div></div><div class="hero-card-stat"><div class="val">A+</div><div class="lbl">Performance</div></div></div></div></div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section section-dark" id="features">
+        <div class="section-container">
+            <div class="section-header"><span class="section-tag">✦ Platform Features</span><h2 class="section-title">Everything You Need to Succeed</h2><p class="section-subtitle">Comprehensive learning tools designed to help you master new skills efficiently.</p></div>
+            <div class="features-grid">
+                <div class="feature-card"><div class="feature-icon icon-indigo"><i class="fas fa-play-circle"></i></div><h3>Video Learning</h3><p>Access high-quality recorded classes anytime, anywhere. Learn at your own pace.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-purple"><i class="fas fa-file-arrow-down"></i></div><h3>Download Notes</h3><p>Download comprehensive notes for every topic. Review key concepts offline.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-emerald"><i class="fas fa-list-check"></i></div><h3>Exercises</h3><p>Practice with curated exercises after each module to reinforce learning.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-cyan"><i class="fas fa-code"></i></div><h3>Practice Problems</h3><p>Challenge yourself with real-world problems and build confidence.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-amber"><i class="fas fa-bullhorn"></i></div><h3>Announcements</h3><p>Stay updated with important announcements and never miss deadlines.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-indigo"><i class="fas fa-fire"></i></div><h3>Login Streak</h3><p>Build consistency with streak tracking and stay motivated.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-purple"><i class="fas fa-users"></i></div><h3>Batch Learning</h3><p>Learn alongside peers in your batch and grow together.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-emerald"><i class="fas fa-chart-line"></i></div><h3>Progress Tracking</h3><p>Monitor your learning with detailed analytics and insights.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="section section-dark" id="about">
+        <div class="section-container">
+            <div class="about-grid">
+                <div class="about-content">
+                    <span class="section-tag">✦ About Us</span>
+                    <h2>About Slokam Technologies</h2>
+                    <p>Slokam Technologies is a premier learning management platform dedicated to empowering students and professionals with cutting-edge technical skills. We bridge the gap between academic knowledge and industry requirements.</p>
+                    <p>Our mission is to make quality technical education accessible to everyone. With expert instructors, curated content, and a supportive community, we help learners achieve their career goals.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="section" id="contact">
+        <div class="section-container">
+            <div class="section-header"><span class="section-tag">✦ Get In Touch</span><h2 class="section-title">Contact Us</h2><p class="section-subtitle">Have questions? We'd love to hear from you. Reach out anytime.</p></div>
+            <div class="contact-grid">
+                <div class="contact-info">
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fas fa-envelope"></i></div><div><h4>Email</h4><span>support@slokamtechnologies.com</span></div></div>
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fab fa-whatsapp"></i></div><div><h4>WhatsApp</h4><span>+91 8881178888</span></div></div>
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fas fa-location-dot"></i></div><div><h4>Address</h4><span>Padmaja Apartment, Sanjeeva Reddy Nagar, Hyderabad, Telangana 500038</span></div></div>
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fab fa-youtube"></i></div><div><h4>YouTube Channel</h4><span><a href="https://www.youtube.com/@SLokamTech" target="_blank" style="color: var(--accent-glow); text-decoration: none;">youtube.com/@SLokamTech</a></span></div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-grid">
+            <div class="footer-brand"><h3>Slokam Technologies</h3><p>Learn. Practice. Build. Grow.<br>Empowering the next generation of tech professionals.</p><div class="social-links" style="margin-top:16px"><a href="#"><i class="fab fa-linkedin-in"></i></a><a href="#"><i class="fab fa-github"></i></a><a href="#"><i class="fab fa-instagram"></i></a><a href="#"><i class="fab fa-youtube"></i></a></div></div>
+            <div class="footer-links"><h4>Quick Links</h4><ul><li><a href="#home">Home</a></li><li><a href="#about">About</a></li><li><a href="#features">Features</a></li><li><a href="#contact">Contact</a></li><li><a href="{{ url_for('demo_login') }}">Demo Portal</a></li></ul></div>
+            <div class="footer-links"><h4>Resources</h4><ul><li><a href="#">Video Library</a></li><li><a href="#">Practice Problems</a></li><li><a href="#">Study Notes</a></li><li><a href="#">Learning Paths</a></li></ul></div>
+            <div class="footer-links"><h4>Support</h4><ul><li><a href="#">Help Center</a></li><li><a href="#">FAQs</a></li><li><a href="#">Privacy Policy</a></li><li><a href="#">Terms of Service</a></li></ul></div>
+        </div>
+        <div class="footer-bottom"><span>&copy; 2026 Slokam Technologies. All Rights Reserved.</span><span>Made with <i class="fas fa-heart" style="color:var(--error-glow)"></i> for learners worldwide</span></div>
+    </footer>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="studentLoginModal"><div class="modal-dialog"><button class="modal-close" onclick="closeStudentLogin()"><i class="fas fa-times"></i></button><h2>Student Login</h2><p class="modal-subtitle">Welcome back! Continue your learning journey.</p><form class="modal-form" action="{{ url_for('login') }}" method="POST"><div class="form-group"><label>Email Address</label><input type="email" name="email" placeholder="your@email.com" required></div><div class="form-group"><label>Password</label><input type="password" name="password" placeholder="••••••••" required></div><button type="submit" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Login</button></form><div class="modal-footer-text"><a href="#" onclick="closeStudentLogin();openForgotPassword()">Forgot Password?</a></div><div class="modal-footer-text">Don't have an account? <a onclick="closeStudentLogin();openRegister()">Register here</a></div></div></div>
+    
+    <div class="modal-overlay" id="registerModal"><div class="modal-dialog modal-lg"><button class="modal-close" onclick="closeRegister()"><i class="fas fa-times"></i></button><h2>Create Account</h2><p class="modal-subtitle">Join Slokam Technologies and start learning today!</p><div class="modal-note"><i class="fas fa-circle-info"></i> Student ID and Batch are auto-generated. Email OTP verification required.</div><form class="modal-form" action="{{ url_for('register') }}" method="POST"><div class="form-row"><div class="form-group"><label>Full Name *</label><input type="text" name="fullname" placeholder="Enter your full name" required></div><div class="form-group"><label>Email Address *</label><input type="email" name="email" placeholder="your@email.com" required></div></div><div class="form-row"><div class="form-group"><label>Password *</label><input type="password" name="password" placeholder="Min 6 characters" required minlength="6"></div><div class="form-group"><label>Confirm Password *</label><input type="password" name="confirm_password" placeholder="Re-enter password" required minlength="6"></div></div><div class="form-row"><div class="form-group"><label>Mobile Number</label><input type="tel" name="mobile_number" placeholder="+91 98765 43210"></div><div class="form-group"><label>Parent Mobile Number</label><input type="tel" name="parent_mobile" placeholder="+91 98765 43210"></div></div><div class="form-row"><div class="form-group"><label>College Name</label><input type="text" name="college_name" placeholder="Your College/University Name"></div><div class="form-group"><label>Qualification *</label><select name="qualification" required><option value="" disabled selected>Select Qualification</option><option value="B.Tech">B.Tech</option><option value="M.Tech">M.Tech</option><option value="BCA">BCA</option><option value="MCA">MCA</option><option value="B.Sc">B.Sc</option><option value="M.Sc">M.Sc</option><option value="Diploma">Diploma</option><option value="MBA">MBA</option><option value="PG Diploma">PG Diploma</option><option value="Other">Other</option></select></div></div><div class="form-row"><div class="form-group"><label>Passed Out Year</label><input type="text" name="passed_out_year" placeholder="e.g., 2024, 2025"></div><div class="form-group"><label>Joined Month & Year</label><input type="text" name="joined_month" placeholder="e.g., May 2026 (optional)"></div></div><button type="submit" class="btn btn-primary"><i class="fas fa-user-plus"></i> Create Account</button></form><div class="modal-footer-text">Already have an account? <a onclick="closeRegister();openStudentLogin()">Login here</a></div></div></div>
+    
+    <div class="modal-overlay" id="otpModal"><div class="modal-dialog"><button class="modal-close" onclick="closeOtp()"><i class="fas fa-times"></i></button><h2>Verify Email</h2><p class="modal-subtitle">Enter the 6-digit OTP sent to your email</p><form class="modal-form" action="{{ url_for('verify_register_otp') }}" method="POST"><div class="form-group"><label>OTP Code</label><input type="text" name="otp" placeholder="Enter 6-digit OTP" required maxlength="6" style="text-align:center;font-size:20px;letter-spacing:4px;font-family:var(--font-mono)"></div><button type="submit" class="btn btn-primary"><i class="fas fa-check-circle"></i> Verify OTP</button></form><div class="modal-footer-text"><a href="{{ url_for('resend_otp') }}">Resend OTP</a></div></div></div>
+    
+    <div class="modal-overlay" id="forgotPasswordModal"><div class="modal-dialog"><button class="modal-close" onclick="closeForgotPassword()"><i class="fas fa-times"></i></button><h2>Forgot Password</h2><p class="modal-subtitle">Enter your registered email to receive OTP</p><form class="modal-form" action="{{ url_for('forgot_password') }}" method="POST"><div class="form-group"><label>Email Address</label><input type="email" name="email" placeholder="your@email.com" required></div><button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send OTP</button></form><div class="modal-footer-text">Remember password? <a onclick="closeForgotPassword();openStudentLogin()">Login here</a></div></div></div>
+    
+    <div class="modal-overlay" id="resetPasswordModal"><div class="modal-dialog"><button class="modal-close" onclick="closeResetPassword()"><i class="fas fa-times"></i></button><h2>Reset Password</h2><p class="modal-subtitle">Enter OTP and your new password</p><form class="modal-form" action="{{ url_for('verify_reset_otp') }}" method="POST"><div class="form-group"><label>OTP</label><input type="text" name="otp" placeholder="Enter 6-digit OTP" required></div><div class="form-group"><label>New Password</label><input type="password" name="new_password" placeholder="Min 6 characters" required minlength="6"></div><button type="submit" class="btn btn-primary"><i class="fas fa-lock"></i> Reset Password</button></form></div></div>
+    
+    <div class="modal-overlay" id="adminLoginModal"><div class="modal-dialog"><button class="modal-close" onclick="closeAdminLogin()"><i class="fas fa-times"></i></button><h2>Admin Login</h2><p class="modal-subtitle">Secure access for administrators only.</p><form class="modal-form" action="{{ url_for('admin_login') }}" method="POST"><div class="form-group"><label>Admin Email</label><input type="email" name="email" placeholder="admin@slokamtechnologies.com" required></div><div class="form-group"><label>Admin Password</label><input type="password" name="password" placeholder="••••••••" required></div><button type="submit" class="btn btn-gold"><i class="fas fa-shield-halved"></i> Admin Login</button></form></div></div>
+    
+    <div class="modal-overlay" id="successPopup"><div class="modal-dialog success-popup"><button class="modal-close" onclick="closeSuccessPopup()"><i class="fas fa-times"></i></button><div class="success-icon"><i class="fas fa-circle-check"></i></div><h2>Registration Successful!</h2><p class="modal-subtitle">Your account has been created and is pending admin approval.</p><p style="color:var(--text-muted);font-size:12px;margin-top:6px">Once approved, you can login and access all learning materials.</p><button class="btn btn-primary" style="margin-top:18px" onclick="closeSuccessPopup();openStudentLogin()"><i class="fas fa-sign-in-alt"></i> Go to Login</button></div></div>
+
+    <script>
+        function openStudentLogin() { document.getElementById('studentLoginModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeStudentLogin() { document.getElementById('studentLoginModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openRegister() { document.getElementById('registerModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeRegister() { document.getElementById('registerModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openOtp() { document.getElementById('otpModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeOtp() { document.getElementById('otpModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openAdminLogin() { document.getElementById('adminLoginModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeAdminLogin() { document.getElementById('adminLoginModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openForgotPassword() { document.getElementById('forgotPasswordModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeForgotPassword() { document.getElementById('forgotPasswordModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openResetPassword() { document.getElementById('resetPasswordModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeResetPassword() { document.getElementById('resetPasswordModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openSuccessPopup() { document.getElementById('successPopup').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeSuccessPopup() { document.getElementById('successPopup').classList.remove('active'); document.body.style.overflow = ''; }
+        
+        document.querySelectorAll('.modal-overlay').forEach(o => { o.addEventListener('click', function(e) { if (e.target === this) { this.classList.remove('active'); document.body.style.overflow = ''; } }); });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active')); document.body.style.overflow = ''; } });
+        
+        function toggleMobileMenu() { document.getElementById('navLinks').classList.toggle('mobile-active'); }
+        function closeMobileMenu() { document.getElementById('navLinks').classList.remove('mobile-active'); }
+        
+        window.addEventListener('scroll', function() { document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 50); });
+        
+        document.addEventListener('DOMContentLoaded', function() { 
+            {% if session.get('reg_otp') %}openOtp();{% endif %}
+            {% if session.get('reset_otp') %}openResetPassword();{% endif %} 
+            document.querySelectorAll('.flash-message').forEach(m => { 
+                if (m.classList.contains('success') && (m.textContent.toLowerCase().includes('registration successful') || m.textContent.toLowerCase().includes('registered'))) { 
+                    setTimeout(openSuccessPopup, 500); 
+                } 
+                setTimeout(() => { 
+                    m.style.opacity = '0'; 
+                    m.style.transform = 'translateX(120%)'; 
+                    setTimeout(() => m.remove(), 400); 
+                }, 4000); 
+            }); 
+        });
+        
+        document.querySelectorAll('a[href^="#"]').forEach(a => { a.addEventListener('click', function(e) { e.preventDefault(); const target = document.querySelector(this.getAttribute('href')); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); });
+    </script>
+</body>
+</html>
