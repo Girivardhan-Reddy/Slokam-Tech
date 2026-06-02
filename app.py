@@ -20,7 +20,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'default-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max upload
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # ==================== LOGGING SETUP ====================
 logging.basicConfig(level=logging.INFO)
@@ -35,25 +34,132 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def init_db():
-    """Initialize tables in Supabase if they don't exist"""
+# ==================== SUPABASE STORAGE BUCKETS ====================
+# Ensure all required buckets exist
+REQUIRED_BUCKETS = ['avatars', 'student_avatars', 'announcements', 'notes', 'exercises', 'practice']
+
+def init_storage_buckets():
+    """Initialize all required storage buckets in Supabase"""
     try:
-        # Create students table
-        supabase.table('students').insert({
-            'id': 'temp',
-            'student_id': 'temp',
-            'fullname': 'temp',
-            'email': 'temp@temp.com',
-            'password': 'temp',
-            'status': 'pending'
-        }).execute()
-        logger.info("Students table exists")
+        for bucket_name in REQUIRED_BUCKETS:
+            try:
+                # Check if bucket exists
+                supabase.storage.get_bucket(bucket_name)
+                logger.info(f"Bucket '{bucket_name}' already exists")
+            except Exception:
+                # Create bucket if it doesn't exist
+                supabase.storage.create_bucket(bucket_name, {'public': True})
+                logger.info(f"Created bucket '{bucket_name}'")
     except Exception as e:
-        if 'relation "students" does not exist' in str(e):
-            logger.warning("Please create tables in Supabase using the SQL editor")
-            logger.warning("Run the SQL script from supabase_schema.sql")
-        else:
-            logger.info("Database connection successful")
+        logger.error(f"Error initializing storage buckets: {e}")
+
+# Initialize storage buckets
+init_storage_buckets()
+
+# ==================== ALLOWED FILE EXTENSIONS ====================
+ALLOWED_EXTENSIONS = {
+    'png', 'jpg', 'jpeg', 'gif', 'webp',  # Images
+    'pdf', 'doc', 'docx', 'xls', 'xlsx',  # Documents
+    'ppt', 'pptx', 'txt', 'zip'            # Other files
+}
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# ==================== SUPABASE STORAGE HELPERS ====================
+def upload_file(bucket_name, file_data, original_filename):
+    """
+    Upload file to Supabase Storage
+    
+    Args:
+        bucket_name: Name of the storage bucket (avatars, notes, exercises, etc.)
+        file_data: The file object from request.files
+        original_filename: Original filename from the uploaded file
+    
+    Returns:
+        Public URL of the uploaded file, or None if upload fails
+    """
+    try:
+        if not file_data or not file_data.filename:
+            return None
+        
+        if not allowed_file(file_data.filename):
+            logger.warning(f"File type not allowed: {file_data.filename}")
+            return None
+        
+        # Generate unique filename
+        file_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+        unique_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        
+        # Read file content
+        file_content = file_data.read()
+        
+        # Upload to Supabase Storage
+        supabase.storage.from_(bucket_name).upload(
+            unique_filename,
+            file_content,
+            {'content-type': file_data.content_type or 'application/octet-stream'}
+        )
+        
+        # Get public URL
+        public_url = supabase.storage.from_(bucket_name).get_public_url(unique_filename)
+        
+        logger.info(f"File uploaded successfully: {public_url}")
+        return public_url
+        
+    except Exception as e:
+        logger.error(f"Upload Error to bucket '{bucket_name}': {e}")
+        return None
+
+def delete_storage_file(file_url):
+    """
+    Delete file from Supabase Storage using its public URL
+    
+    Args:
+        file_url: Full public URL of the file
+    
+    Returns:
+        True if deletion successful, False otherwise
+    """
+    try:
+        if not file_url or not file_url.startswith(SUPABASE_URL):
+            return False
+        
+        # Extract bucket and filename from URL
+        # URL format: https://PROJECT_ID.supabase.co/storage/v1/object/public/bucket_name/filename
+        url_parts = file_url.split('/public/')
+        if len(url_parts) != 2:
+            logger.warning(f"Invalid storage URL format: {file_url}")
+            return False
+        
+        bucket_and_file = url_parts[1]
+        bucket_name = bucket_and_file.split('/')[0]
+        filename = '/'.join(bucket_and_file.split('/')[1:])
+        
+        # Delete from Supabase Storage
+        supabase.storage.from_(bucket_name).remove([filename])
+        
+        logger.info(f"File deleted successfully from bucket '{bucket_name}': {filename}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Delete Error for {file_url}: {e}")
+        return False
+
+def get_public_url(bucket_name, filename):
+    """Get public URL for a file in Supabase Storage"""
+    try:
+        return supabase.storage.from_(bucket_name).get_public_url(filename)
+    except Exception as e:
+        logger.error(f"Error getting public URL: {e}")
+        return None
+
+# ==================== SMTP CONFIGURATION ====================
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
+SMTP_EMAIL = os.getenv('SMTP_EMAIL', 'girivennapusa8@gmail.com')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', 'pxxm mwud rsaj xncb')
 
 # ==================== SUPABASE DATABASE HELPERS ====================
 def get_db():
@@ -127,51 +233,6 @@ def db_delete(table, record_id):
     except Exception as e:
         logger.error(f"DELETE Error on {table}: {e}")
         return False
-
-# ==================== FILE STORAGE SETUP ====================
-UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip'}
-
-for folder in ['avatars', 'student_avatars', 'announcements', 'notes', 'exercises', 'practice']:
-    folder_path = os.path.join(UPLOAD_FOLDER, folder)
-    os.makedirs(folder_path, exist_ok=True)
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# ==================== SMTP CONFIGURATION ====================
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
-SMTP_EMAIL = os.getenv('SMTP_EMAIL', 'girivennapusa8@gmail.com')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', 'pxxm mwud rsaj xncb')
-
-def upload_file(bucket, file_data, original_filename):
-    try:
-        if not file_data or not file_data.filename:
-            return None
-        if not allowed_file(file_data.filename):
-            return None
-        file_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
-        unique_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{file_ext}"
-        folder_path = os.path.join(UPLOAD_FOLDER, bucket)
-        os.makedirs(folder_path, exist_ok=True)
-        file_path = os.path.join(folder_path, unique_filename)
-        file_data.save(file_path)
-        return f"/{UPLOAD_FOLDER}/{bucket}/{unique_filename}"
-    except Exception as e:
-        logger.error(f"Upload Error to {bucket}: {e}")
-        return None
-
-def delete_file(file_path):
-    try:
-        if file_path and file_path.startswith('/static/uploads/'):
-            full_path = file_path[1:]
-            if os.path.exists(full_path):
-                os.remove(full_path)
-                return True
-    except Exception as e:
-        logger.error(f"Delete Error: {e}")
-    return False
 
 # ==================== UTILITY FUNCTIONS ====================
 def safe_int(value, default=0):
@@ -354,9 +415,6 @@ def create_or_update_admin_details(admin_email, admin_name=None, admin_avatar=No
         }
         return db_insert('admin_details', admin_data)
     return None
-
-# Initialize database
-init_db()
 
 # ==================== SESSION DECORATORS ====================
 def login_required(f):
@@ -714,8 +772,15 @@ def student_upload_avatar():
         if file_ext not in allowed_extensions:
             flash('Only image files are allowed (PNG, JPG, JPEG, GIF, WEBP).', 'error')
             return redirect(url_for('student_dashboard'))
+        
+        # Upload to Supabase Storage
         avatar_url = upload_file('student_avatars', avatar_file, avatar_file.filename)
         if avatar_url:
+            # Delete old avatar if exists
+            student = db_get_by_id('students', session['user_id'])
+            if student and student.get('avatar'):
+                delete_storage_file(student.get('avatar'))
+            
             result = db_update('students', session['user_id'], {'avatar': avatar_url})
             if result:
                 session['user_avatar'] = avatar_url
@@ -1159,20 +1224,27 @@ def add_video():
     exercise_link = request.form.get('exercise_link', '').strip()
     practice_file = request.files.get('practice_file')
     practice_link = request.form.get('practice_link', '').strip()
+    
     if not all([title, youtube_link, folder_id]):
         flash('Title, YouTube link, and folder are required.', 'error')
         return redirect(url_for('admin_videos'))
+    
     folder = db_get_by_id('folders', folder_id)
     folder_name = folder.get('folder_name', 'Unknown') if folder else 'Unknown'
+    
+    # Upload files to Supabase Storage
     notes_url = notes_link
     if notes_file and notes_file.filename:
         notes_url = upload_file('notes', notes_file, notes_file.filename)
+    
     exercise_url = exercise_link
     if exercise_file and exercise_file.filename:
         exercise_url = upload_file('exercises', exercise_file, exercise_file.filename)
+    
     practice_url = practice_link
     if practice_file and practice_file.filename:
         practice_url = upload_file('practice', practice_file, practice_file.filename)
+    
     is_demo_value = 'true' if is_demo in ['true', '1', 'on', 'yes'] else 'false'
     data = {
         'title': title,
@@ -1206,9 +1278,11 @@ def edit_video(object_id):
     exercise_link = request.form.get('exercise_link', '').strip()
     practice_file = request.files.get('practice_file')
     practice_link = request.form.get('practice_link', '').strip()
+    
     if not all([title, youtube_link, folder_id]):
         flash('All fields required.', 'error')
         return redirect(url_for('admin_videos'))
+    
     folder = db_get_by_id('folders', folder_id)
     data = {
         'title': title,
@@ -1219,24 +1293,41 @@ def edit_video(object_id):
         'description': description,
         'is_demo': 'true' if is_demo in ['true', '1', 'on', 'yes'] else 'false'
     }
+    
+    # Get existing video to delete old files
+    existing_video = db_get_by_id('videos', object_id)
+    
+    # Handle notes file
     if notes_link:
         data['notes_file'] = notes_link
     if notes_file and notes_file.filename:
+        # Delete old file if exists
+        if existing_video and existing_video.get('notes_file') and not existing_video.get('notes_file').startswith('http'):
+            delete_storage_file(existing_video.get('notes_file'))
         notes_url = upload_file('notes', notes_file, notes_file.filename)
         if notes_url:
             data['notes_file'] = notes_url
+    
+    # Handle exercise file
     if exercise_link:
         data['exercise_file'] = exercise_link
     if exercise_file and exercise_file.filename:
+        if existing_video and existing_video.get('exercise_file') and not existing_video.get('exercise_file').startswith('http'):
+            delete_storage_file(existing_video.get('exercise_file'))
         exercise_url = upload_file('exercises', exercise_file, exercise_file.filename)
         if exercise_url:
             data['exercise_file'] = exercise_url
+    
+    # Handle practice file
     if practice_link:
         data['practice_file'] = practice_link
     if practice_file and practice_file.filename:
+        if existing_video and existing_video.get('practice_file') and not existing_video.get('practice_file').startswith('http'):
+            delete_storage_file(existing_video.get('practice_file'))
         practice_url = upload_file('practice', practice_file, practice_file.filename)
         if practice_url:
             data['practice_file'] = practice_url
+    
     result = db_update('videos', object_id, data)
     flash('Video updated successfully.' if result else 'Failed to update video.', 'success' if result else 'error')
     return redirect(url_for('admin_videos'))
@@ -1246,10 +1337,12 @@ def edit_video(object_id):
 def delete_video(object_id):
     video = db_get_by_id('videos', object_id)
     if video:
+        # Delete all associated files from Supabase Storage
         for field in ['notes_file', 'exercise_file', 'practice_file']:
             url = video.get(field)
-            if url and not url.startswith('http'):
-                delete_file(url)
+            if url and url.startswith(SUPABASE_URL):
+                delete_storage_file(url)
+    
     result = db_delete('videos', object_id)
     flash('Video deleted successfully.' if result else 'Failed to delete video.', 'success' if result else 'error')
     return redirect(url_for('admin_videos'))
@@ -1299,17 +1392,21 @@ def add_announcement():
     attachment_name = ''
     attachment_type = ''
     attachment_file = request.files.get('attachment')
+    
     if attachment_file and attachment_file.filename:
         uploaded_url = upload_file('announcements', attachment_file, attachment_file.filename)
         if uploaded_url:
             attachment_url = uploaded_url
             attachment_name = attachment_file.filename
             attachment_type = attachment_file.filename.rsplit('.', 1)[-1].lower() if '.' in attachment_file.filename else 'file'
+    
     link_url = request.form.get('link_url', '').strip()
     link_text = request.form.get('link_text', '').strip()
+    
     if not all([title, message]):
         flash('Title and message are required.', 'error')
         return redirect(url_for('admin_announcements'))
+    
     data = {
         'title': title,
         'message': message,
@@ -1336,9 +1433,11 @@ def edit_announcement(object_id):
     title = request.form.get('title', '').strip()
     message = request.form.get('message', '').strip()
     target_batch = request.form.get('target_batch', 'all').strip()
+    
     if not all([title, message]):
         flash('Title and message required.', 'error')
         return redirect(url_for('admin_announcements'))
+    
     data = {'title': title, 'message': message, 'batch': target_batch}
     result = db_update('announcements', object_id, data)
     flash(
@@ -1350,6 +1449,12 @@ def edit_announcement(object_id):
 @app.route('/admin/delete-announcement/<object_id>')
 @admin_required
 def delete_announcement(object_id):
+    announcement = db_get_by_id('announcements', object_id)
+    if announcement and announcement.get('attachment_url'):
+        # Delete attachment from Supabase Storage
+        if announcement.get('attachment_url').startswith(SUPABASE_URL):
+            delete_storage_file(announcement.get('attachment_url'))
+    
     result = db_delete('announcements', object_id)
     flash(
         'Announcement deleted successfully.' if result else 'Failed to delete.',
@@ -1428,8 +1533,15 @@ def admin_upload_avatar():
         if file_ext not in allowed_extensions:
             flash('Only image files are allowed (PNG, JPG, JPEG, GIF, WEBP).', 'error')
             return redirect(url_for('admin_dashboard'))
+        
+        # Upload to Supabase Storage
         avatar_url = upload_file('avatars', avatar_file, avatar_file.filename)
         if avatar_url:
+            # Delete old avatar if exists
+            admin_details = get_admin_details(session.get('admin_email', ''))
+            if admin_details and admin_details.get('avatar'):
+                delete_storage_file(admin_details.get('avatar'))
+            
             session['admin_avatar'] = avatar_url
             result = create_or_update_admin_details(session.get('admin_email', ''), admin_avatar=avatar_url)
             if result:
