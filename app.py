@@ -772,6 +772,7 @@ def update_profile():
         flash('Failed to update profile.', 'error')
     return redirect(url_for('student_dashboard'))
 
+# FIXED: Student avatar upload using 'avatars' bucket (not 'student_avatars')
 @app.route('/student/upload-avatar', methods=['POST'])
 @login_required
 def student_upload_avatar():
@@ -783,8 +784,8 @@ def student_upload_avatar():
             flash('Only image files are allowed (PNG, JPG, JPEG, GIF, WEBP).', 'error')
             return redirect(url_for('student_dashboard'))
         
-        # Upload to Supabase Storage
-        avatar_url = upload_file('student_avatars', avatar_file, avatar_file.filename)
+        # Upload to Supabase Storage - Using 'avatars' bucket (same as admin)
+        avatar_url = upload_file('avatars', avatar_file, avatar_file.filename)
         if avatar_url:
             # Delete old avatar if exists
             student = db_get_by_id('students', session['user_id'])
@@ -869,8 +870,7 @@ def admin_dashboard():
         if batch not in batch_activity:
             batch_activity[batch] = {'count': 0, 'total_streak': 0}
         batch_activity[batch]['count'] += 1
-        batch_activity[batch]['total_streak'] += streak
-    most_active_batch = 'N/A'
+        batch_activity[batch]['total_streak'] += streak    most_active_batch = 'N/A'
     highest_avg = 0
     for batch, data in batch_activity.items():
         avg = data['total_streak'] / data['count'] if data['count'] > 0 else 0
