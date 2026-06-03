@@ -1,1552 +1,1352 @@
-import os
-import random
-import logging
-import uuid
-from datetime import datetime, timedelta, timezone
-from functools import wraps
-from flask import (
-    Flask, render_template, request, redirect, url_for,
-    session, flash, send_file
-)
-from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
-from supabase import create_client, Client
-
-load_dotenv()
-
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'default-secret-key')
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max upload
-
-# ==================== LOGGING SETUP ====================
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# ==================== SUPABASE SETUP ====================
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ==================== ALLOWED FILE EXTENSIONS ====================
-ALLOWED_EXTENSIONS = {
-    'png', 'jpg', 'jpeg', 'gif', 'webp',  # Images
-    'pdf', 'doc', 'docx', 'xls', 'xlsx',  # Documents
-    'ppt', 'pptx', 'txt', 'zip'            # Other files
-}
-
-def allowed_file(filename):
-    """Check if file extension is allowed"""
-    if not filename or '.' not in filename:
-        return False
-    return filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# ==================== TIMEZONE HELPER ====================
-def get_ist_time():
-    """Get current time in IST (UTC+5:30) for storage"""
-    utc_now = datetime.now(timezone.utc)
-    ist_now = utc_now + timedelta(hours=5, minutes=30)
-    return ist_now
-
-def get_ist_timestamp():
-    """Return current IST time as ISO string for database storage"""
-    return get_ist_time().isoformat()
-
-# ==================== SUPABASE STORAGE HELPERS ====================
-def upload_file(bucket_name, file_data, original_filename):
-    """
-    Upload file to Supabase Storage
-    
-    Args:
-        bucket_name: Name of the storage bucket (avatars, notes, exercises, etc.)
-        file_data: The file object from request.files
-        original_filename: Original filename from the uploaded file
-    
-    Returns:
-        Public URL of the uploaded file, or None if upload fails
-    """
-    try:
-        # Validation
-        if not file_data or not file_data.filename:
-            logger.warning(f"No file provided for upload to bucket '{bucket_name}'")
-            return None
-        
-        if not allowed_file(file_data.filename):
-            logger.warning(f"File type not allowed: {file_data.filename} for bucket '{bucket_name}'")
-            return None
-        
-        # Read file content
-        file_content = file_data.read()
-        if not file_content:
-            logger.warning(f"Empty file: {file_data.filename}")
-            return None
-        
-        # Generate unique filename
-        file_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
-        unique_filename = f"{get_ist_time().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{file_ext}"
-        
-        # Upload to Supabase Storage
-        logger.info(f"Uploading file '{original_filename}' to bucket '{bucket_name}' as '{unique_filename}'")
-        supabase.storage.from_(bucket_name).upload(
-            unique_filename,
-            file_content,
-            {'content-type': file_data.content_type or 'application/octet-stream'}
-        )
-        
-        # Get public URL
-        public_url = supabase.storage.from_(bucket_name).get_public_url(unique_filename)
-        
-        logger.info(f"File uploaded successfully: {public_url}")
-        return public_url
-        
-    except Exception as e:
-        logger.error(f"Upload Error to bucket '{bucket_name}': {str(e)}")
-        return None
-
-def delete_storage_file(file_url):
-    """
-    Delete file from Supabase Storage using its public URL
-    
-    Args:
-        file_url: Full public URL of the file
-    
-    Returns:
-        True if deletion successful, False otherwise
-    """
-    try:
-        if not file_url:
-            logger.warning("No file URL provided for deletion")
-            return False
-        
-        # Check if it's a Supabase Storage URL
-        if "storage/v1/object/public/" not in file_url:
-            logger.warning(f"URL is not a Supabase Storage public URL: {file_url}")
-            return False
-        
-        # Extract bucket and filename from URL
-        try:
-            url_parts = file_url.split('/public/')
-            if len(url_parts) != 2:
-                logger.warning(f"Invalid storage URL format: {file_url}")
-                return False
-            
-            bucket_and_file = url_parts[1]
-            bucket_name = bucket_and_file.split('/')[0]
-            filename = '/'.join(bucket_and_file.split('/')[1:])
-            
-            if not bucket_name or not filename:
-                logger.warning(f"Could not extract bucket or filename from URL: {file_url}")
-                return False
-            
-            logger.info(f"Deleting file '{filename}' from bucket '{bucket_name}'")
-            supabase.storage.from_(bucket_name).remove([filename])
-            
-            logger.info(f"File deleted successfully from bucket '{bucket_name}': {filename}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error parsing storage URL {file_url}: {str(e)}")
-            return False
-        
-    except Exception as e:
-        logger.error(f"Delete Error for {file_url}: {str(e)}")
-        return False
-
-def get_public_url(bucket_name, filename):
-    """Get public URL for a file in Supabase Storage"""
-    try:
-        return supabase.storage.from_(bucket_name).get_public_url(filename)
-    except Exception as e:
-        logger.error(f"Error getting public URL: {e}")
-        return None
-
-# ==================== SUPABASE DATABASE HELPERS ====================
-def get_db():
-    """Return supabase client for compatibility"""
-    return supabase
-
-def db_get(table, filters=None):
-    """Get records from Supabase table"""
-    try:
-        query = supabase.table(table).select('*')
-        if filters:
-            for key, value in filters.items():
-                query = query.eq(key, value)
-        response = query.execute()
-        return response.data if response.data else []
-    except Exception as e:
-        logger.error(f"GET Error on {table}: {e}")
-        return []
-
-def db_get_by_id(table, record_id):
-    """Get single record by ID"""
-    try:
-        response = supabase.table(table).select('*').eq('id', record_id).execute()
-        if response.data and len(response.data) > 0:
-            return response.data[0]
-        return None
-    except Exception as e:
-        logger.error(f"GET by ID Error on {table}: {e}")
-        return None
-
-def db_insert(table, data):
-    """Insert record into Supabase table"""
-    try:
-        if 'id' not in data:
-            data['id'] = str(uuid.uuid4())
-        
-        # Convert datetime objects to strings
-        for key, value in data.items():
-            if isinstance(value, datetime):
-                data[key] = value.isoformat()
-        
-        response = supabase.table(table).insert(data).execute()
-        if response.data and len(response.data) > 0:
-            return response.data[0]
-        return None
-    except Exception as e:
-        logger.error(f"INSERT Error on {table}: {e}")
-        return None
-
-def db_update(table, record_id, data):
-    """Update record in Supabase table"""
-    try:
-        # Convert datetime objects to strings
-        for key, value in data.items():
-            if isinstance(value, datetime):
-                data[key] = value.isoformat()
-        
-        response = supabase.table(table).update(data).eq('id', record_id).execute()
-        if response.data and len(response.data) > 0:
-            return response.data[0]
-        return None
-    except Exception as e:
-        logger.error(f"UPDATE Error on {table}: {e}")
-        return None
-
-def db_delete(table, record_id):
-    """Delete record from Supabase table"""
-    try:
-        response = supabase.table(table).delete().eq('id', record_id).execute()
-        return len(response.data) > 0 if response.data else False
-    except Exception as e:
-        logger.error(f"DELETE Error on {table}: {e}")
-        return False
-
-# ==================== UTILITY FUNCTIONS ====================
-def safe_int(value, default=0):
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return default
-
-def safe_str(value, default=''):
-    if value is None:
-        return default
-    return str(value)
-
-def format_date(value):
-    """Format date for display - database already stores IST"""
-    if not value:
-        return '-'
-    try:
-        if isinstance(value, str):
-            if 'T' in value:
-                dt = datetime.fromisoformat(value.replace('Z', '+00:00').split('+')[0].split('.')[0])
-            else:
-                return value[:16] if len(value) > 16 else value
-        elif isinstance(value, datetime):
-            dt = value
-        else:
-            return str(value)[:16] if value else '-'
-        
-        # Database already stores IST, display directly
-        return dt.strftime('%d %b %Y, %I:%M %p')
-    except Exception as e:
-        logger.error(f"Date formatting error: {e}")
-        return str(value)[:16] if value else '-'
-
-def format_time_ago(value):
-    """Format time ago - database already stores IST"""
-    if not value:
-        return '-'
-    try:
-        if isinstance(value, str):
-            if 'T' in value:
-                dt = datetime.fromisoformat(value.replace('Z', '+00:00').split('+')[0].split('.')[0])
-            else:
-                return value
-        elif isinstance(value, datetime):
-            dt = value
-        else:
-            return str(value)
-        
-        # Use current IST time
-        now = get_ist_time()
-        
-        diff = now - dt
-        if diff.days > 365:
-            return f"{diff.days // 365}y ago"
-        elif diff.days > 30:
-            return f"{diff.days // 30}mo ago"
-        elif diff.days > 0:
-            return f"{diff.days}d ago"
-        elif diff.seconds > 3600:
-            return f"{diff.seconds // 3600}h ago"
-        elif diff.seconds > 60:
-            return f"{diff.seconds // 60}m ago"
-        else:
-            return "Just now"
-    except Exception as e:
-        logger.error(f"Time ago formatting error: {e}")
-        return str(value)[:16] if value else '-'
-
-def get_batch_from_joined_month(joined_month):
-    if not joined_month:
-        return f"{get_ist_time().strftime('%B %Y')} Batch"
-    return f"{joined_month} Batch"
-
-def is_demo_true(value):
-    if value is None:
-        return False
-    if isinstance(value, bool):
-        return value
-    return str(value).lower() in ['true', '1', 'on', 'yes']
-
-def is_url(value):
-    if not value:
-        return False
-    return str(value).startswith('http://') or str(value).startswith('https://')
-
-# Fixed: Generate unique student ID using timestamp + random
-def generate_student_id():
-    """Generate a unique student ID using timestamp and random number"""
-    timestamp = get_ist_time().strftime('%y%m%d%H%M%S')
-    random_num = random.randint(1000, 9999)
-    return f"STU{timestamp}{random_num}"
-
-# Register Jinja2 filters
-app.jinja_env.globals['format_date'] = format_date
-app.jinja_env.globals['format_time_ago'] = format_time_ago
-app.jinja_env.globals['is_demo_true'] = is_demo_true
-app.jinja_env.globals['is_url'] = is_url
-
-# ==================== BUSINESS LOGIC HELPERS ====================
-def get_joined_month():
-    return get_ist_time().strftime("%B %Y")
-
-def update_login_streak(student):
-    student_id = student['id']
-    now = get_ist_time().strftime('%Y-%m-%d')
-    last_login = student.get('last_login')
-    streak = safe_int(student.get('login_streak'), 0)
-    if last_login and str(last_login) not in ['None', '', 'null']:
-        try:
-            last_str = str(last_login)[:10]
-            last_date = datetime.strptime(last_str, '%Y-%m-%d').date()
-            today = get_ist_time().date()
-            diff = (today - last_date).days
-            if diff == 0:
-                pass
-            elif diff == 1:
-                streak += 1
-            else:
-                streak = 1
-        except:
-            streak = 1
-    else:
-        streak = 1
-    log_student_activity(student_id, 'login', f'Login streak: {streak}')
-    db_update('students', student_id, {'login_streak': streak, 'last_login': now})
-    return streak
-
-def log_student_activity(student_object_id, action_type, description):
-    try:
-        db_insert('student_activities', {
-            'student_object_id': student_object_id,
-            'action_type': action_type,
-            'description': description,
-            'created_at': get_ist_timestamp()
-        })
-    except Exception as e:
-        logger.error(f"Log activity error: {e}")
-
-def get_admin_details(admin_email):
-    admins = db_get('admin_details', {'email': admin_email})
-    return admins[0] if admins else None
-
-def create_or_update_admin_details(admin_email, admin_name=None, admin_avatar=None):
-    existing_admin = get_admin_details(admin_email)
-    if existing_admin:
-        update_data = {'updated_at': get_ist_timestamp()}
-        if admin_name is not None:
-            update_data['name'] = admin_name
-        if admin_avatar is not None:
-            update_data['avatar'] = admin_avatar
-        if update_data:
-            return db_update('admin_details', existing_admin['id'], update_data)
-    else:
-        admin_data = {
-            'email': admin_email,
-            'name': admin_name if admin_name else 'Administrator',
-            'avatar': admin_avatar if admin_avatar else '',
-            'created_at': get_ist_timestamp(),
-            'updated_at': get_ist_timestamp()
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="description" content="Slokam Technologies - Learn. Practice. Build. Grow. Premier LMS for technical education with expert-led training, practice problems, and certification.">
+    <meta name="theme-color" content="#000000">
+    <title>Slokam Technologies | Learn. Practice. Build. Grow.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        return db_insert('admin_details', admin_data)
-    return None
 
-# ==================== SESSION DECORATORS ====================
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please login first.', 'error')
-            return redirect(url_for('index'))
-        return f(*args, **kwargs)
-    return decorated
+        :root {
+            --bg-deep: #000;
+            --bg-primary: #030712;
+            --bg-secondary: #0a0f1a;
+            --bg-card: #0d1525;
+            --bg-card-hover: #111b2e;
+            --border-subtle: rgba(255, 255, 255, 0.04);
+            --border-medium: rgba(255, 255, 255, 0.08);
+            --accent: #6366f1;
+            --accent-glow: #818cf8;
+            --accent-secondary: #a855f7;
+            --accent-tertiary: #06b6d4;
+            --gold: #f59e0b;
+            --gold-glow: #fbbf24;
+            --white: #fff;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --success-glow: #34d399;
+            --error: #ef4444;
+            --error-glow: #f87171;
+            --warning: #f59e0b;
+            --radius-sm: 12px;
+            --radius: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+            --radius-full: 9999px;
+            --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
+            --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 20px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+            --transition-out: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-bounce: 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            --font-sans: 'Inter', sans-serif;
+            --font-display: 'Outfit', sans-serif;
+            --font-mono: 'Space Grotesk', monospace;
+        }
 
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'admin_id' not in session:
-            flash('Admin login required.', 'error')
-            return redirect(url_for('index'))
-        return f(*args, **kwargs)
-    return decorated
+        html {
+            scroll-behavior: smooth;
+            background: var(--bg-deep);
+        }
 
-# ==================== PUBLIC ROUTES ====================
-@app.route('/')
-def index():
-    return render_template('base.html')
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
 
-# ==================== REGISTRATION FLOW (No OTP) ====================
-@app.route('/register', methods=['POST'])
-def register():
-    fullname = request.form.get('fullname', '').strip()
-    email = request.form.get('email', '').strip().lower()
-    password = request.form.get('password', '').strip()
-    confirm_password = request.form.get('confirm_password', '').strip()
-    passed_out_year = request.form.get('passed_out_year', '').strip()
-    joined_month_input = request.form.get('joined_month', '').strip()
-    college_name = request.form.get('college_name', '').strip()
-    mobile_number = request.form.get('mobile_number', '').strip()
-    parent_mobile = request.form.get('parent_mobile', '').strip()
-    qualification = request.form.get('qualification', '').strip()
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
 
-    if not all([fullname, email, password, confirm_password]):
-        flash('Full name, email, and password are required.', 'error')
-        return redirect(url_for('index'))
-    if password != confirm_password:
-        flash('Passwords do not match.', 'error')
-        return redirect(url_for('index'))
-    if len(password) < 6:
-        flash('Password must be at least 6 characters.', 'error')
-        return redirect(url_for('index'))
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.35;
+            animation: ambFloat 12s ease-in-out infinite;
+        }
 
-    existing = db_get('students', {'email': email})
-    if existing and len(existing) > 0:
-        flash('Email already registered.', 'error')
-        return redirect(url_for('index'))
+        .ambient-orb-1 {
+            width: 600px;
+            height: 600px;
+            background: var(--accent);
+            top: -20%;
+            left: -15%;
+            animation-delay: 0s;
+        }
 
-    joined_month = joined_month_input if joined_month_input else get_joined_month()
-    batch = get_batch_from_joined_month(joined_month)
-    
-    student_data = {
-        'student_id': generate_student_id(),
-        'fullname': fullname,
-        'email': email,
-        'password': generate_password_hash(password),
-        'passed_out_year': passed_out_year,
-        'joined_month': joined_month,
-        'college_name': college_name,
-        'mobile_number': mobile_number,
-        'parent_mobile': parent_mobile,
-        'qualification': qualification,
-        'batch': batch,
-        'status': 'pending',
-        'login_streak': 0,
-        'last_login': '',
-        'email_verified': 'true',
-        'created_at': get_ist_timestamp()
-    }
-    result = db_insert('students', student_data)
-    
-    if result:
-        log_student_activity(result.get('id', ''), 'registered', 'Account created, pending approval')
-        flash('Registration successful! Your account is pending admin approval.', 'success')
-    else:
-        flash('Registration failed. Please try again.', 'error')
-    return redirect(url_for('index'))
+        .ambient-orb-2 {
+            width: 500px;
+            height: 500px;
+            background: var(--accent-secondary);
+            bottom: -25%;
+            right: -10%;
+            animation-delay: -5s;
+        }
 
-# ==================== LOGIN ====================
-@app.route('/login', methods=['POST'])
-def login():
-    email = request.form.get('email', '').strip().lower()
-    password = request.form.get('password', '').strip()
-    if not all([email, password]):
-        flash('Email and password required.', 'error')
-        return redirect(url_for('index'))
-    students = db_get('students', {'email': email})
-    if not students:
-        flash('Invalid credentials.', 'error')
-        return redirect(url_for('index'))
-    student = students[0]
-    if not check_password_hash(student.get('password', ''), password):
-        flash('Invalid credentials.', 'error')
-        return redirect(url_for('index'))
-    status = student.get('status', 'pending')
-    if status == 'pending':
-        flash('Account waiting for admin approval.', 'error')
-        return redirect(url_for('index'))
-    if status == 'rejected':
-        flash('Your account has been rejected.', 'error')
-        return redirect(url_for('index'))
-    update_login_streak(student)
-    session['user_id'] = student.get('id', '')
-    session['student_id'] = student.get('student_id', '')
-    session['user_name'] = student.get('fullname', '')
-    session['user_type'] = 'student'
-    session['user_email'] = student.get('email', '')
-    session['user_avatar'] = student.get('avatar', '')
-    flash('Login successful!', 'success')
-    return redirect(url_for('student_dashboard'))
+        .ambient-orb-3 {
+            width: 400px;
+            height: 400px;
+            background: var(--accent-tertiary);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -8s;
+            opacity: 0.18;
+        }
 
-# ==================== PASSWORD RESET (No OTP) ====================
-@app.route('/forgot-password', methods=['POST'])
-def forgot_password():
-    email = request.form.get('email', '').strip().lower()
-    if not email:
-        flash('Please enter your email.', 'error')
-        return redirect(url_for('index'))
-    students = db_get('students', {'email': email})
-    if not students:
-        flash('No account found with this email.', 'error')
-        return redirect(url_for('index'))
-    
-    # Store email in session for password reset
-    session['reset_email'] = email
-    flash('Please enter your new password below.', 'info')
-    return redirect(url_for('index'))
+        @keyframes ambFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(60px, -50px) scale(1.1); }
+            66% { transform: translate(-40px, 30px) scale(0.9); }
+        }
 
-@app.route('/reset-password', methods=['POST'])
-def reset_password():
-    new_password = request.form.get('new_password', '').strip()
-    email = session.get('reset_email', '')
-    
-    if not new_password:
-        flash('New password required.', 'error')
-        return redirect(url_for('index'))
-    if len(new_password) < 6:
-        flash('Password must be at least 6 characters.', 'error')
-        return redirect(url_for('index'))
-    if not email:
-        flash('Session expired. Please try again.', 'error')
-        return redirect(url_for('index'))
-    
-    students = db_get('students', {'email': email})
-    if not students:
-        flash('Account not found.', 'error')
-        return redirect(url_for('index'))
-    
-    hashed = generate_password_hash(new_password)
-    result = db_update('students', students[0]['id'], {'password': hashed})
-    session.pop('reset_email', None)
-    
-    flash(
-        'Password reset successfully! Please login.' if result else 'Failed to reset password.',
-        'success' if result else 'error'
-    )
-    return redirect(url_for('index'))
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+        }
 
-@app.route('/change-password', methods=['POST'])
-@login_required
-def change_password():
-    current = request.form.get('current_password', '').strip()
-    new_pw = request.form.get('new_password', '').strip()
-    if not current or not new_pw:
-        flash('Current and new password required.', 'error')
-        return redirect(url_for('student_dashboard'))
-    if len(new_pw) < 6:
-        flash('New password must be at least 6 characters.', 'error')
-        return redirect(url_for('student_dashboard'))
-    student = db_get_by_id('students', session['user_id'])
-    if not student:
-        flash('Student not found.', 'error')
-        return redirect(url_for('logout'))
-    if not check_password_hash(student.get('password', ''), current):
-        flash('Current password is incorrect.', 'error')
-        return redirect(url_for('student_dashboard'))
-    result = db_update('students', session['user_id'], {'password': generate_password_hash(new_pw)})
-    flash('Password changed!' if result else 'Failed.', 'success' if result else 'error')
-    return redirect(url_for('student_dashboard'))
+        /* Navbar */
+        .navbar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: 92%;
+            max-width: 1300px;
+            background: rgba(13, 21, 37, 0.7);
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-full);
+            padding: 6px 8px;
+            transition: all var(--transition-out);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+        }
 
-# ==================== ADMIN LOGIN ====================
-@app.route('/admin-login', methods=['POST'])
-def admin_login():
-    email = request.form.get('email', '').strip().lower()
-    password = request.form.get('password', '').strip()
-    admin_email = os.getenv('ADMIN_EMAIL', 'admin@gmail.com')
-    admin_password = os.getenv('ADMIN_PASSWORD', '123')
-    if email == admin_email and password == admin_password:
-        admin_details = get_admin_details(email)
-        if admin_details:
-            session['admin_name'] = admin_details.get('name', 'Administrator')
-            session['admin_avatar'] = admin_details.get('avatar', '')
-            session['admin_object_id'] = admin_details.get('id', '')
-        else:
-            new_admin = create_or_update_admin_details(email, 'Administrator', '')
-            if new_admin:
-                session['admin_name'] = new_admin.get('name', 'Administrator')
-                session['admin_avatar'] = new_admin.get('avatar', '')
-                session['admin_object_id'] = new_admin.get('id', '')
-            else:
-                session['admin_name'] = 'Administrator'
-                session['admin_avatar'] = ''
-                session['admin_object_id'] = ''
-        session['admin_id'] = 'admin'
-        session['user_type'] = 'admin'
-        session['admin_email'] = email
-        flash('Admin login successful!', 'success')
-        return redirect(url_for('admin_dashboard'))
-    else:
-        flash('Invalid admin credentials.', 'error')
-        return redirect(url_for('index'))
+        .navbar.scrolled {
+            background: rgba(10, 15, 26, 0.85);
+            border-color: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 12px 50px rgba(0, 0, 0, 0.5);
+            width: 96%;
+        }
 
-# ==================== DEMO LOGIN ====================
-@app.route('/demo-login')
-def demo_login():
-    session['user_id'] = 'demo_user'
-    session['student_id'] = 'DEMO0001'
-    session['user_name'] = 'Demo Student'
-    session['user_type'] = 'demo'
-    flash('Welcome to Demo Portal! Explore limited content.', 'info')
-    return redirect(url_for('demo_dashboard'))
+        .navbar-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            height: 56px;
+            gap: 20px;
+        }
 
-# ==================== LOGOUT ====================
-@app.route('/logout')
-def logout():
-    session.clear()
-    flash('Logged out successfully.', 'success')
-    return redirect(url_for('index'))
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--white);
+            letter-spacing: -0.5px;
+            transition: var(--transition-out);
+        }
 
-# ==================== STUDENT DASHBOARD ====================
-@app.route('/student-dashboard')
-@login_required
-def student_dashboard():
-    if session.get('user_type') != 'student':
-        flash('Access denied.', 'error')
-        return redirect(url_for('index'))
-    student = db_get_by_id('students', session['user_id'])
-    if not student:
-        flash('Student not found.', 'error')
-        return redirect(url_for('logout'))
-    student_batch = student.get('batch', '')
-    all_announcements = db_get('announcements') or []
-    announcements = [a for a in all_announcements if a.get('batch', 'all') in ['all', student_batch]]
-    folders = db_get('folders') or []
-    all_videos = db_get('videos') or []
-    videos = [v for v in all_videos]
-    return render_template('user.html',
-                           student=student,
-                           announcements=announcements,
-                           folders=folders,
-                           videos=videos)
+        .navbar-brand:hover {
+            transform: scale(1.02);
+        }
 
-# ==================== STUDENT PROFILE UPDATE ====================
-@app.route('/update-profile', methods=['POST'])
-@login_required
-def update_profile():
-    fullname = request.form.get('fullname', '').strip()
-    data = {
-        'fullname': fullname,
-        'mobile_number': request.form.get('mobile_number', '').strip(),
-        'parent_mobile': request.form.get('parent_mobile', '').strip(),
-        'college_name': request.form.get('college_name', '').strip(),
-        'qualification': request.form.get('qualification', '').strip(),
-        'passed_out_year': request.form.get('passed_out_year', '').strip()
-    }
-    if not fullname:
-        flash('Name is required.', 'error')
-        return redirect(url_for('student_dashboard'))
-    result = db_update('students', session['user_id'], data)
-    if result:
-        session['user_name'] = fullname
-        log_student_activity(session['user_id'], 'profile_update', 'Profile updated')
-        flash('Profile updated successfully!', 'success')
-    else:
-        flash('Failed to update profile.', 'error')
-    return redirect(url_for('student_dashboard'))
+        .logo-img {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            flex-shrink: 0;
+            animation: logoPulse 3s ease-in-out infinite;
+            object-fit: cover;
+        }
 
-@app.route('/student/upload-avatar', methods=['POST'])
-@login_required
-def student_upload_avatar():
-    avatar_file = request.files.get('avatar')
-    if avatar_file and avatar_file.filename:
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-        file_ext = avatar_file.filename.rsplit('.', 1)[1].lower() if '.' in avatar_file.filename else ''
-        if file_ext not in allowed_extensions:
-            flash('Only image files are allowed (PNG, JPG, JPEG, GIF, WEBP).', 'error')
-            return redirect(url_for('student_dashboard'))
+        @keyframes logoPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); }
+            50% { box-shadow: 0 0 40px rgba(168, 85, 247, 0.6); }
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 13px;
+            padding: 10px 16px;
+            border-radius: var(--radius-full);
+            transition: all var(--transition-out);
+            position: relative;
+            letter-spacing: 0.2px;
+        }
+
+        .nav-links a:hover {
+            color: var(--white);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 2px;
+            background: var(--accent-glow);
+            border-radius: 2px;
+            transition: width var(--transition-out);
+        }
+
+        .nav-links a:hover::after {
+            width: 50%;
+        }
+
+        .nav-buttons {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            border: none;
+            transition: all var(--transition-out);
+            font-family: var(--font-sans);
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            letter-spacing: 0.3px;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: var(--radius-full);
+            opacity: 0;
+            transition: opacity var(--transition-out);
+        }
+
+        .btn:hover::before {
+            opacity: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+            color: white;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-ghost:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-2px);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, var(--gold), #e67e00);
+            color: #1a1a1a;
+            font-weight: 700;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-gold:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(245, 158, 11, 0.5);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--accent-glow);
+            color: var(--accent-glow);
+            background: rgba(99, 102, 241, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .btn-demo {
+            background: transparent;
+            color: var(--accent-tertiary);
+            border: 2px solid var(--accent-tertiary);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+            animation: demoGlow 2s ease-in-out infinite;
+        }
+
+        .btn-demo:hover {
+            background: rgba(6, 182, 212, 0.1);
+            box-shadow: 0 0 40px rgba(6, 182, 212, 0.4);
+            transform: translateY(-2px);
+        }
+
+        @keyframes demoGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.2); }
+            50% { box-shadow: 0 0 35px rgba(6, 182, 212, 0.5); }
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .btn-lg {
+            padding: 16px 32px;
+            font-size: 16px;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: var(--radius-sm);
+            transition: var(--transition-out);
+        }
+
+        .mobile-menu-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            padding: 140px 40px 80px;
+            z-index: 1;
+        }
+
+        .hero-container {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+            width: 100%;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-content {
+            animation: fadeSlideUp 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            padding: 8px 18px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-glow);
+            margin-bottom: 32px;
+            animation: glowPulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes glowPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3); }
+            50% { box-shadow: 0 0 0 18px rgba(99, 102, 241, 0); }
+        }
+
+        .hero-badge .live-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--success-glow);
+            border-radius: 50%;
+            animation: liveBlink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes liveBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(40px, 6vw, 68px);
+            font-weight: 800;
+            line-height: 1.08;
+            color: var(--white);
+            margin-bottom: 24px;
+            letter-spacing: -1.5px;
+        }
+
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, var(--accent-glow), var(--accent-secondary), var(--accent-tertiary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% 200%;
+            animation: gradientShift 4s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            margin-bottom: 36px;
+            max-width: 500px;
+            line-height: 1.7;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .hero-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeSlideUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+        }
+
+        .hero-card {
+            width: 100%;
+            max-width: 480px;
+            background: rgba(13, 21, 37, 0.6);
+            backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-xl);
+            padding: 28px;
+            box-shadow: var(--shadow-glow);
+            position: relative;
+            transform: perspective(1000px) rotateY(-4deg) rotateX(2deg);
+            transition: all var(--transition-out);
+        }
+
+        .hero-card:hover {
+            transform: perspective(1000px) rotateY(-1deg) rotateX(0deg);
+        }
+
+        .hero-card-dots {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .hero-card-dots span {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .hero-card-dots span:nth-child(1) { background: #ff5f57; }
+        .hero-card-dots span:nth-child(2) { background: #febc2e; }
+        .hero-card-dots span:nth-child(3) { background: #28c840; }
+
+        .hero-card-line {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            margin: 14px 0;
+            overflow: hidden;
+        }
+
+        .hero-card-line-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+            border-radius: 10px;
+            width: 70%;
+            animation: linePulse 3s ease-in-out infinite;
+        }
+
+        @keyframes linePulse {
+            0%, 100% { width: 65%; }
+            50% { width: 88%; }
+        }
+
+        .hero-card-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .hero-card-stat {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: var(--radius);
+            padding: 16px;
+            text-align: center;
+        }
+
+        .hero-card-stat .val {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-glow);
+            font-family: var(--font-display);
+        }
+
+        .hero-card-stat .lbl {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Sections */
+        .section {
+            padding: 100px 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-dark {
+            background: rgba(3, 7, 18, 0.5);
+        }
+
+        .section-container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 70px;
+        }
+
+        .section-tag {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--accent-glow);
+            margin-bottom: 16px;
+            background: rgba(99, 102, 241, 0.08);
+            padding: 6px 16px;
+            border-radius: var(--radius-full);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(30px, 4vw, 48px);
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+
+        .section-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            max-width: 550px;
+            margin: 0 auto;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: rgba(13, 21, 37, 0.5);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-lg);
+            padding: 36px 28px;
+            transition: all var(--transition-out);
+            cursor: default;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), var(--accent-secondary), transparent);
+            opacity: 0;
+            transition: opacity var(--transition-out);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+            transition: all var(--transition-bounce);
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.1) rotate(-8deg);
+        }
+
+        .icon-indigo { background: rgba(99, 102, 241, 0.12); color: var(--accent-glow); }
+        .icon-purple { background: rgba(168, 85, 247, 0.12); color: var(--accent-secondary); }
+        .icon-cyan { background: rgba(6, 182, 212, 0.12); color: var(--accent-tertiary); }
+        .icon-emerald { background: rgba(16, 185, 129, 0.12); color: var(--success-glow); }
+        .icon-amber { background: rgba(245, 158, 11, 0.12); color: var(--gold-glow); }
+
+        .feature-card h3 {
+            font-family: var(--font-display);
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* About Section */
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .about-content .section-tag {
+            margin-bottom: 20px;
+        }
+
+        .about-content h2 {
+            font-family: var(--font-display);
+            font-size: clamp(28px, 4vw, 42px);
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+        }
+
+        .about-content p {
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        /* Contact Section */
+        .contact-grid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .contact-info {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .contact-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            background: rgba(13, 21, 37, 0.5);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            transition: all var(--transition-out);
+            backdrop-filter: blur(10px);
+        }
+
+        .contact-card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateX(6px);
+        }
+
+        .contact-icon-circle {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius);
+            background: rgba(99, 102, 241, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: var(--accent-glow);
+            flex-shrink: 0;
+        }
+
+        .contact-card h4 {
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 2px;
+            font-size: 14px;
+        }
+
+        .contact-card span {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .contact-card a {
+            color: var(--accent-glow);
+            text-decoration: none;
+            transition: var(--transition-out);
+        }
+
+        .contact-card a:hover {
+            text-decoration: underline;
+        }        
+        /* Footer */
+        .footer {
+            background: rgba(0, 0, 0, 0.6);
+            border-top: 1px solid var(--border-subtle);
+            padding: 60px 40px 30px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .footer-grid {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 40px;
+        }
+
+        .footer-brand h3 {
+            font-family: var(--font-display);
+            font-size: 22px;
+            color: var(--white);
+            margin-bottom: 10px;
+        }
+
+        .footer-brand p {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .footer-links h4 {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 18px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .footer-links ul {
+            list-style: none;
+        }
+
+        .footer-links ul li {
+            margin-bottom: 8px;
+        }
+
+        .footer-links ul li a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            transition: var(--transition-out);
+        }
+
+        .footer-links ul li a:hover {
+            color: var(--accent-glow);
+            padding-left: 4px;
+        }
+
+        .footer-bottom {
+            max-width: 1300px;
+            margin: 40px auto 0;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .social-links {
+            display: flex;
+            gap: 10px;
+        }
+
+        .social-links a {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.04);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 16px;
+            transition: all var(--transition-out);
+            text-decoration: none;
+        }
+
+        .social-links a:hover {
+            background: var(--accent);
+            color: white;
+            transform: translateY(-3px);
+        }
+
+        /* Modal Styles */
+        .modal-overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.85); 
+            backdrop-filter: blur(12px); 
+            z-index: 10000; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            opacity: 0; 
+            visibility: hidden; 
+            transition: all 0.35s ease; 
+            padding: 20px; 
+        }
         
-        avatar_url = upload_file('avatars', avatar_file, avatar_file.filename)
-        if avatar_url:
-            student = db_get_by_id('students', session['user_id'])
-            if student:
-                old_avatar = student.get('avatar')
-                if old_avatar:
-                    delete_storage_file(old_avatar)
-            
-            result = db_update('students', session['user_id'], {'avatar': avatar_url})
-            if result:
-                session['user_avatar'] = avatar_url
-                flash('Profile photo updated successfully!', 'success')
-            else:
-                flash('Failed to save photo.', 'error')
-        else:
-            flash('Failed to upload photo.', 'error')
-    else:
-        flash('Please select a file.', 'error')
-    return redirect(url_for('student_dashboard'))
-
-# ==================== DEMO DASHBOARD ====================
-@app.route('/demo-dashboard')
-def demo_dashboard():
-    if session.get('user_type') != 'demo':
-        flash('Please access demo first.', 'error')
-        return redirect(url_for('index'))
-
-    student = {
-        'student_id': 'DEMO0001',
-        'fullname': 'Demo Student',
-        'email': 'demo@slokamtechnology.com',
-        'batch': 'Demo Access',
-        'joined_month': get_ist_time().strftime('%B %Y'),
-        'login_streak': 0,
-        'status': 'demo',
-        'college_name': '-',
-        'mobile_number': '-',
-        'qualification': '-',
-        'passed_out_year': '-'
-    }
-
-    all_announcements = db_get('announcements') or []
-    announcements = [a for a in all_announcements if a.get('batch', 'all') == 'all']
-
-    folders = db_get('folders') or []
-    all_videos = db_get('videos') or []
-    demo_videos = [v for v in all_videos if is_demo_true(v.get('is_demo', False))]
-
-    demo_folder_ids = set(v.get('folder_id', '') for v in demo_videos if v.get('folder_id'))
-    demo_folders = [f for f in folders if f.get('id') in demo_folder_ids]
-
-    return render_template('demo.html',
-                           student=student,
-                           announcements=announcements,
-                           folders=demo_folders,
-                           videos=demo_videos)
-
-# ==================== ADMIN DASHBOARD ====================
-@app.route('/admin-dashboard')
-@admin_required
-def admin_dashboard():
-    admin_details = get_admin_details(session.get('admin_email', ''))
-    if admin_details:
-        session['admin_name'] = admin_details.get('name', session.get('admin_name', 'Administrator'))
-        session['admin_avatar'] = admin_details.get('avatar', session.get('admin_avatar', ''))
-    students = db_get('students') or []
-    approved = [s for s in students if s.get('status') == 'approved']
-    pending = [s for s in students if s.get('status') == 'pending']
-    rejected = [s for s in students if s.get('status') == 'rejected']
-    batches_set = sorted(set(s.get('batch', '') for s in students if s.get('batch')))
-    folders = db_get('folders') or []
-    videos = db_get('videos') or []
-    announcements = db_get('announcements') or []
-    total_streak = sum(safe_int(s.get('login_streak'), 0) for s in approved)
-    avg_streak = round(total_streak / len(approved), 2) if approved else 0
-    batch_activity = {}
-    for s in approved:
-        batch = s.get('batch', 'Unknown')
-        streak = safe_int(s.get('login_streak'), 0)
-        if batch not in batch_activity:
-            batch_activity[batch] = {'count': 0, 'total_streak': 0}
-        batch_activity[batch]['count'] += 1
-        batch_activity[batch]['total_streak'] += streak
-    
-    most_active_batch = 'N/A'
-    highest_avg = 0
-    for batch, data in batch_activity.items():
-        avg = data['total_streak'] / data['count'] if data['count'] > 0 else 0
-        if avg > highest_avg:
-            highest_avg = avg
-            most_active_batch = batch
-    
-    student_activities = sorted(db_get('student_activities') or [],
-                                key=lambda x: safe_str(x.get('created_at', '')), reverse=True)[:10]
-    for act in student_activities:
-        s = db_get_by_id('students', act.get('student_object_id', ''))
-        act['student_name'] = s.get('fullname', 'Unknown') if s else 'Unknown'
-        act['student_id_display'] = s.get('student_id', '') if s else ''
-    recent_students = sorted(students, key=lambda x: safe_str(x.get('created_at', '')), reverse=True)[:5]
-    return render_template('admin.html',
-                           active_tab='dashboard',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           total_students=len(students),
-                           approved_students=len(approved),
-                           pending_students=len(pending),
-                           rejected_students=len(rejected),
-                           total_batches=len(batches_set),
-                           total_folders=len(folders),
-                           total_videos=len(videos),
-                           total_announcements=len(announcements),
-                           average_streak=avg_streak,
-                           most_active_batch=most_active_batch,
-                           students=students,
-                           batches=batches_set,
-                           batch_data=batch_activity,
-                           recent_students=recent_students,
-                           all_activities=student_activities,
-                           folders=folders,
-                           videos=videos,
-                           announcements=announcements,
-                           student_activities=student_activities)
-
-# ==================== ADMIN STUDENT MANAGEMENT ====================
-@app.route('/admin/students')
-@admin_required
-def admin_students():
-    search = request.args.get('search', '').strip()
-    batch_filter = request.args.get('batch', '').strip()
-    status_filter = request.args.get('status', '').strip()
-    all_students = db_get('students') or []
-    students = all_students.copy()
-    if search:
-        sl = search.lower()
-        students = [s for s in students if sl in safe_str(s.get('fullname', '')).lower()
-                    or sl in safe_str(s.get('student_id', '')).lower()
-                    or sl in safe_str(s.get('email', '')).lower()]
-    if batch_filter:
-        students = [s for s in students if s.get('batch') == batch_filter]
-    if status_filter:
-        students = [s for s in students if s.get('status') == status_filter]
-    batches = sorted(set(s.get('batch', '') for s in all_students if s.get('batch')))
-    approved = [s for s in all_students if s.get('status') == 'approved']
-    pending = [s for s in all_students if s.get('status') == 'pending']
-    rejected = [s for s in all_students if s.get('status') == 'rejected']
-    total_folders = len(db_get('folders') or [])
-    total_videos = len(db_get('videos') or [])
-    total_announcements = len(db_get('announcements') or [])
-    return render_template('admin.html',
-                           active_tab='students',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           students=students,
-                           all_students=all_students,
-                           batches=batches,
-                           total_students=len(all_students),
-                           approved_students=len(approved),
-                           pending_students=len(pending),
-                           rejected_students=len(rejected),
-                           total_batches=len(batches),
-                           total_folders=total_folders,
-                           total_videos=total_videos,
-                           total_announcements=total_announcements,
-                           search=search,
-                           batch_filter=batch_filter,
-                           status_filter=status_filter,
-                           folders=db_get('folders') or [],
-                           videos=db_get('videos') or [],
-                           announcements=db_get('announcements') or [],
-                           student_activities=[],
-                           average_streak=0,
-                           most_active_batch='N/A')
-
-# ==================== ADMIN STUDENT DETAIL AND EDIT ROUTES ====================
-@app.route('/admin/student/<object_id>')
-@admin_required
-def admin_student_detail(object_id):
-    student = db_get_by_id('students', object_id)
-    if not student:
-        flash('Student not found.', 'error')
-        return redirect(url_for('admin_students'))
-    all_students = db_get('students') or []
-    batches = sorted(set(s.get('batch', '') for s in all_students if s.get('batch')))
-    pending = [s for s in all_students if s.get('status') == 'pending']
-    total_folders = len(db_get('folders') or [])
-    total_videos = len(db_get('videos') or [])
-    total_announcements = len(db_get('announcements') or [])
-    all_activities = db_get('student_activities') or []
-    student_activities = [a for a in all_activities if a.get('student_object_id') == object_id]
-    student_activities = sorted(student_activities, key=lambda x: safe_str(x.get('created_at', '')), reverse=True)[:20]
-    return render_template('admin.html',
-                           active_tab='students',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           view_student=student,
-                           students=all_students,
-                           batches=batches,
-                           total_students=len(all_students),
-                           pending_students=len(pending),
-                           approved_students=len([s for s in all_students if s.get('status') == 'approved']),
-                           rejected_students=len([s for s in all_students if s.get('status') == 'rejected']),
-                           total_batches=len(batches),
-                           total_folders=total_folders,
-                           total_videos=total_videos,
-                           total_announcements=total_announcements,
-                           student_activities=student_activities,
-                           folders=db_get('folders') or [],
-                           videos=db_get('videos') or [],
-                           announcements=db_get('announcements') or [],
-                           average_streak=0,
-                           most_active_batch='N/A')
-
-@app.route('/admin/student/edit/<object_id>', methods=['POST'])
-@admin_required
-def admin_edit_student(object_id):
-    fullname = request.form.get('fullname', '').strip()
-    email = request.form.get('email', '').strip().lower()
-    joined_month = request.form.get('joined_month', '').strip()
-    status = request.form.get('status', '').strip()
-    if not fullname or not email:
-        flash('Name and email required.', 'error')
-        return redirect(url_for('admin_students'))
-    batch = get_batch_from_joined_month(joined_month) if joined_month else None
-    data = {'fullname': fullname, 'email': email, 'status': status}
-    if joined_month:
-        data['joined_month'] = joined_month
-    if batch:
-        data['batch'] = batch
-    result = db_update('students', object_id, data)
-    if result:
-        log_student_activity(object_id, 'profile_update', f'Admin updated profile. Batch: {batch}')
-        flash('Student updated successfully.', 'success')
-    else:
-        flash('Failed to update student.', 'error')
-    return redirect(url_for('admin_students'))
-
-@app.route('/admin/student/delete/<object_id>')
-@admin_required
-def admin_delete_student(object_id):
-    student = db_get_by_id('students', object_id)
-    if student:
-        old_avatar = student.get('avatar')
-        if old_avatar:
-            delete_storage_file(old_avatar)
-    
-    result = db_delete('students', object_id)
-    flash(
-        'Student deleted successfully.' if result else 'Failed to delete student.',
-        'success' if result else 'error'
-    )
-    return redirect(url_for('admin_students'))
-
-@app.route('/approve/<object_id>')
-@admin_required
-def approve_student(object_id):
-    if not object_id or object_id == '':
-        flash('Invalid student ID.', 'error')
-        return redirect(url_for('admin_students'))
-    result = db_update('students', object_id, {'status': 'approved'})
-    if result:
-        log_student_activity(object_id, 'approved', 'Account approved by admin')
-        flash('Student approved successfully!', 'success')
-    else:
-        flash('Failed to approve student.', 'error')
-    return redirect(url_for('admin_students'))
-
-@app.route('/reject/<object_id>')
-@admin_required
-def reject_student(object_id):
-    if not object_id or object_id == '':
-        flash('Invalid student ID.', 'error')
-        return redirect(url_for('admin_students'))
-    
-    student = db_get_by_id('students', object_id)
-    if student:
-        old_avatar = student.get('avatar')
-        if old_avatar:
-            delete_storage_file(old_avatar)
-    
-    result = db_delete('students', object_id)
-    flash(
-        'Student rejected and removed.' if result else 'Failed to reject student.',
-        'success' if result else 'error'
-    )
-    return redirect(url_for('admin_students'))
-
-# ==================== ADMIN BATCH MANAGEMENT ====================
-@app.route('/admin/batches')
-@admin_required
-def admin_batches():
-    students = db_get('students') or []
-    batch_data = {}
-    pending = [s for s in students if s.get('status') == 'pending']
-    approved = [s for s in students if s.get('status') == 'approved']
-    rejected = [s for s in students if s.get('status') == 'rejected']
-    for s in students:
-        batch = s.get('batch', 'Unknown') or 'Unknown'
-        if batch not in batch_data:
-            batch_data[batch] = {'students': [], 'approved': 0, 'pending': 0, 'avg_streak': 0}
-        batch_data[batch]['students'].append(s)
-        if s.get('status') == 'approved':
-            batch_data[batch]['approved'] += 1
-        elif s.get('status') == 'pending':
-            batch_data[batch]['pending'] += 1
-    for batch, data in batch_data.items():
-        streaks = [safe_int(s.get('login_streak'), 0) for s in data['students'] if s.get('status') == 'approved']
-        data['avg_streak'] = round(sum(streaks) / len(streaks), 1) if streaks else 0
-    batches_list = sorted(batch_data.keys())
-    total_batches = len(batches_list)
-    total_folders = len(db_get('folders') or [])
-    total_videos = len(db_get('videos') or [])
-    total_announcements = len(db_get('announcements') or [])
-    return render_template('admin.html',
-                           active_tab='batches',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           batch_data=batch_data,
-                           batches=batches_list,
-                           total_batches=total_batches,
-                           students=students,
-                           pending_students=len(pending),
-                           approved_students=len(approved),
-                           rejected_students=len(rejected),
-                           total_students=len(students),
-                           total_folders=total_folders,
-                           total_videos=total_videos,
-                           total_announcements=total_announcements,
-                           folders=db_get('folders') or [],
-                           videos=db_get('videos') or [],
-                           announcements=db_get('announcements') or [],
-                           student_activities=[],
-                           average_streak=0,
-                           most_active_batch='N/A')
-
-# ==================== ADMIN FOLDER MANAGEMENT ====================
-@app.route('/admin/folders')
-@admin_required
-def admin_folders():
-    folders = db_get('folders') or []
-    videos = db_get('videos') or []
-    students = db_get('students') or []
-    batches = sorted(set(s.get('batch', '') for s in students if s.get('batch')))
-    pending = [s for s in students if s.get('status') == 'pending']
-    approved = [s for s in students if s.get('status') == 'approved']
-    rejected = [s for s in students if s.get('status') == 'rejected']
-    total_folders = len(folders)
-    total_videos = len(videos)
-    total_announcements = len(db_get('announcements') or [])
-    return render_template('admin.html',
-                           active_tab='folders',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           folders=folders,
-                           videos=videos,
-                           total_folders=total_folders,
-                           total_videos=total_videos,
-                           pending_students=len(pending),
-                           approved_students=len(approved),
-                           rejected_students=len(rejected),
-                           total_students=len(students),
-                           total_batches=len(batches),
-                           total_announcements=total_announcements,
-                           students=students,
-                           batches=batches,
-                           announcements=db_get('announcements') or [],
-                           student_activities=[],
-                           average_streak=0,
-                           most_active_batch='N/A')
-
-@app.route('/admin/add-folder', methods=['POST'])
-@admin_required
-def add_folder():
-    folder_name = request.form.get('folder_name', '').strip()
-    folder_date = request.form.get('folder_date', '').strip()
-    if not folder_name:
-        flash('Folder name is required.', 'error')
-        return redirect(url_for('admin_folders'))
-    data = {
-        'folder_name': folder_name,
-        'folder_date': folder_date if folder_date else get_ist_time().strftime('%Y-%m-%d'),
-        'created_at': get_ist_timestamp()
-    }
-    result = db_insert('folders', data)
-    flash('Folder added successfully.' if result else 'Failed to add folder.', 'success' if result else 'error')
-    return redirect(url_for('admin_folders'))
-
-@app.route('/admin/edit-folder/<object_id>', methods=['POST'])
-@admin_required
-def edit_folder(object_id):
-    folder_name = request.form.get('folder_name', '').strip()
-    folder_date = request.form.get('folder_date', '').strip()
-    if not folder_name:
-        flash('Folder name is required.', 'error')
-        return redirect(url_for('admin_folders'))
-    data = {
-        'folder_name': folder_name,
-        'folder_date': folder_date if folder_date else get_ist_time().strftime('%Y-%m-%d')
-    }
-    result = db_update('folders', object_id, data)
-    flash('Folder updated successfully.' if result else 'Failed to update folder.', 'success' if result else 'error')
-    return redirect(url_for('admin_folders'))
-
-@app.route('/admin/delete-folder/<object_id>')
-@admin_required
-def delete_folder(object_id):
-    result = db_delete('folders', object_id)
-    flash('Folder deleted successfully.' if result else 'Failed to delete folder.', 'success' if result else 'error')
-    return redirect(url_for('admin_folders'))
-
-# ==================== ADMIN VIDEO MANAGEMENT ====================
-@app.route('/admin/videos')
-@admin_required
-def admin_videos():
-    videos = db_get('videos') or []
-    folders = db_get('folders') or []
-    students = db_get('students') or []
-    batches = sorted(set(s.get('batch', '') for s in students if s.get('batch')))
-    pending = [s for s in students if s.get('status') == 'pending']
-    approved = [s for s in students if s.get('status') == 'approved']
-    rejected = [s for s in students if s.get('status') == 'rejected']
-    total_videos = len(videos)
-    total_folders = len(folders)
-    total_announcements = len(db_get('announcements') or [])
-    return render_template('admin.html',
-                           active_tab='videos',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           videos=videos,
-                           folders=folders,
-                           total_videos=total_videos,
-                           pending_students=len(pending),
-                           approved_students=len(approved),
-                           rejected_students=len(rejected),
-                           total_students=len(students),
-                           total_batches=len(batches),
-                           total_folders=total_folders,
-                           total_announcements=total_announcements,
-                           students=students,
-                           batches=batches,
-                           announcements=db_get('announcements') or [],
-                           student_activities=[],
-                           average_streak=0,
-                           most_active_batch='N/A')
-
-@app.route('/admin/add-video', methods=['POST'])
-@admin_required
-def add_video():
-    title = request.form.get('title', '').strip()
-    youtube_link = request.form.get('youtube_link', '').strip()
-    video_date = request.form.get('video_date', '').strip()
-    folder_id = request.form.get('folder_id', '').strip()
-    description = request.form.get('description', '').strip()
-    is_demo = request.form.get('is_demo', 'false').strip()
-    notes_file = request.files.get('notes_file')
-    notes_link = request.form.get('notes_link', '').strip()
-    exercise_file = request.files.get('exercise_file')
-    exercise_link = request.form.get('exercise_link', '').strip()
-    practice_file = request.files.get('practice_file')
-    practice_link = request.form.get('practice_link', '').strip()
-    
-    if not all([title, youtube_link, folder_id]):
-        flash('Title, YouTube link, and folder are required.', 'error')
-        return redirect(url_for('admin_videos'))
-    
-    folder = db_get_by_id('folders', folder_id)
-    folder_name = folder.get('folder_name', 'Unknown') if folder else 'Unknown'
-    
-    notes_url = notes_link
-    if notes_file and notes_file.filename:
-        notes_url = upload_file('notes', notes_file, notes_file.filename)
-    
-    exercise_url = exercise_link
-    if exercise_file and exercise_file.filename:
-        exercise_url = upload_file('exercises', exercise_file, exercise_file.filename)
-    
-    practice_url = practice_link
-    if practice_file and practice_file.filename:
-        practice_url = upload_file('practice', practice_file, practice_file.filename)
-    
-    is_demo_value = 'true' if is_demo in ['true', '1', 'on', 'yes'] else 'false'
-    data = {
-        'title': title,
-        'youtube_link': youtube_link,
-        'video_date': video_date if video_date else get_ist_time().strftime('%Y-%m-%d'),
-        'folder_id': folder_id,
-        'folder_name': folder_name,
-        'description': description,
-        'notes_file': notes_url if notes_url else '',
-        'exercise_file': exercise_url if exercise_url else '',
-        'practice_file': practice_url if practice_url else '',
-        'is_demo': is_demo_value,
-        'created_at': get_ist_timestamp()
-    }
-    result = db_insert('videos', data)
-    flash('Video added successfully.' if result else 'Failed to add video.', 'success' if result else 'error')
-    return redirect(url_for('admin_videos'))
-
-@app.route('/admin/edit-video/<object_id>', methods=['POST'])
-@admin_required
-def edit_video(object_id):
-    title = request.form.get('title', '').strip()
-    youtube_link = request.form.get('youtube_link', '').strip()
-    video_date = request.form.get('video_date', '').strip()
-    folder_id = request.form.get('folder_id', '').strip()
-    description = request.form.get('description', '').strip()
-    is_demo = request.form.get('is_demo', 'false').strip()
-    notes_file = request.files.get('notes_file')
-    notes_link = request.form.get('notes_link', '').strip()
-    exercise_file = request.files.get('exercise_file')
-    exercise_link = request.form.get('exercise_link', '').strip()
-    practice_file = request.files.get('practice_file')
-    practice_link = request.form.get('practice_link', '').strip()
-    
-    if not all([title, youtube_link, folder_id]):
-        flash('All fields required.', 'error')
-        return redirect(url_for('admin_videos'))
-    
-    folder = db_get_by_id('folders', folder_id)
-    existing_video = db_get_by_id('videos', object_id)
-    
-    data = {
-        'title': title,
-        'youtube_link': youtube_link,
-        'video_date': video_date if video_date else get_ist_time().strftime('%Y-%m-%d'),
-        'folder_id': folder_id,
-        'folder_name': folder.get('folder_name', 'Unknown') if folder else 'Unknown',
-        'description': description,
-        'is_demo': 'true' if is_demo in ['true', '1', 'on', 'yes'] else 'false'
-    }
-    
-    if notes_link:
-        data['notes_file'] = notes_link
-        if existing_video and existing_video.get('notes_file'):
-            delete_storage_file(existing_video.get('notes_file'))
-    elif notes_file and notes_file.filename:
-        if existing_video and existing_video.get('notes_file'):
-            delete_storage_file(existing_video.get('notes_file'))
-        notes_url = upload_file('notes', notes_file, notes_file.filename)
-        if notes_url:
-            data['notes_file'] = notes_url
-    elif existing_video and existing_video.get('notes_file') and not notes_link and not notes_file:
-        data['notes_file'] = existing_video.get('notes_file')
-    
-    if exercise_link:
-        data['exercise_file'] = exercise_link
-        if existing_video and existing_video.get('exercise_file'):
-            delete_storage_file(existing_video.get('exercise_file'))
-    elif exercise_file and exercise_file.filename:
-        if existing_video and existing_video.get('exercise_file'):
-            delete_storage_file(existing_video.get('exercise_file'))
-        exercise_url = upload_file('exercises', exercise_file, exercise_file.filename)
-        if exercise_url:
-            data['exercise_file'] = exercise_url
-    elif existing_video and existing_video.get('exercise_file') and not exercise_link and not exercise_file:
-        data['exercise_file'] = existing_video.get('exercise_file')
-    
-    if practice_link:
-        data['practice_file'] = practice_link
-        if existing_video and existing_video.get('practice_file'):
-            delete_storage_file(existing_video.get('practice_file'))
-    elif practice_file and practice_file.filename:
-        if existing_video and existing_video.get('practice_file'):
-            delete_storage_file(existing_video.get('practice_file'))
-        practice_url = upload_file('practice', practice_file, practice_file.filename)
-        if practice_url:
-            data['practice_file'] = practice_url
-    elif existing_video and existing_video.get('practice_file') and not practice_link and not practice_file:
-        data['practice_file'] = existing_video.get('practice_file')
-    
-    result = db_update('videos', object_id, data)
-    flash('Video updated successfully.' if result else 'Failed to update video.', 'success' if result else 'error')
-    return redirect(url_for('admin_videos'))
-
-@app.route('/admin/delete-video/<object_id>')
-@admin_required
-def delete_video(object_id):
-    video = db_get_by_id('videos', object_id)
-    if video:
-        for field in ['notes_file', 'exercise_file', 'practice_file']:
-            file_url = video.get(field)
-            if file_url:
-                delete_storage_file(file_url)
-    
-    result = db_delete('videos', object_id)
-    flash('Video deleted successfully.' if result else 'Failed to delete video.', 'success' if result else 'error')
-    return redirect(url_for('admin_videos'))
-
-# ==================== ADMIN ANNOUNCEMENT MANAGEMENT ====================
-@app.route('/admin/announcements')
-@admin_required
-def admin_announcements():
-    announcements = db_get('announcements') or []
-    students = db_get('students') or []
-    batches = sorted(set(s.get('batch', '') for s in students if s.get('batch')))
-    pending = [s for s in students if s.get('status') == 'pending']
-    approved = [s for s in students if s.get('status') == 'approved']
-    rejected = [s for s in students if s.get('status') == 'rejected']
-    total_announcements = len(announcements)
-    total_folders = len(db_get('folders') or [])
-    total_videos = len(db_get('videos') or [])
-    return render_template('admin.html',
-                           active_tab='announcements',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           announcements=announcements,
-                           batches=batches,
-                           total_announcements=total_announcements,
-                           pending_students=len(pending),
-                           approved_students=len(approved),
-                           rejected_students=len(rejected),
-                           total_students=len(students),
-                           total_batches=len(batches),
-                           total_folders=total_folders,
-                           total_videos=total_videos,
-                           students=students,
-                           folders=db_get('folders') or [],
-                           videos=db_get('videos') or [],
-                           student_activities=[],
-                           average_streak=0,
-                           most_active_batch='N/A')
-
-@app.route('/admin/add-announcement', methods=['POST'])
-@admin_required
-def add_announcement():
-    title = request.form.get('title', '').strip()
-    message = request.form.get('message', '').strip()
-    target_batch = request.form.get('target_batch', 'all').strip()
-    attachment_url = ''
-    attachment_name = ''
-    attachment_type = ''
-    attachment_file = request.files.get('attachment')
-    
-    if attachment_file and attachment_file.filename:
-        uploaded_url = upload_file('announcements', attachment_file, attachment_file.filename)
-        if uploaded_url:
-            attachment_url = uploaded_url
-            attachment_name = attachment_file.filename
-            attachment_type = attachment_file.filename.rsplit('.', 1)[-1].lower() if '.' in attachment_file.filename else 'file'
-    
-    link_url = request.form.get('link_url', '').strip()
-    link_text = request.form.get('link_text', '').strip()
-    
-    if not all([title, message]):
-        flash('Title and message are required.', 'error')
-        return redirect(url_for('admin_announcements'))
-    
-    data = {
-        'title': title,
-        'message': message,
-        'batch': target_batch,
-        'created_at': get_ist_timestamp(),
-        'admin_name': session.get('admin_name', 'Administrator'),
-        'admin_avatar': session.get('admin_avatar', ''),
-        'attachment_url': attachment_url,
-        'attachment_name': attachment_name,
-        'attachment_type': attachment_type,
-        'link_url': link_url,
-        'link_text': link_text if link_text else 'Click here'
-    }
-    result = db_insert('announcements', data)
-    if result:
-        flash('Announcement sent successfully!', 'success')
-    else:
-        flash('Failed to add announcement.', 'error')
-    return redirect(url_for('admin_announcements'))
-
-@app.route('/admin/edit-announcement/<object_id>', methods=['POST'])
-@admin_required
-def edit_announcement(object_id):
-    title = request.form.get('title', '').strip()
-    message = request.form.get('message', '').strip()
-    target_batch = request.form.get('target_batch', 'all').strip()
-    
-    existing_announcement = db_get_by_id('announcements', object_id)
-    
-    attachment_file = request.files.get('attachment')
-    attachment_url = existing_announcement.get('attachment_url', '') if existing_announcement else ''
-    attachment_name = existing_announcement.get('attachment_name', '') if existing_announcement else ''
-    attachment_type = existing_announcement.get('attachment_type', '') if existing_announcement else ''
-    
-    if attachment_file and attachment_file.filename:
-        if existing_announcement and existing_announcement.get('attachment_url'):
-            delete_storage_file(existing_announcement.get('attachment_url'))
+        .modal-overlay.active { 
+            opacity: 1; 
+            visibility: visible; 
+        }
         
-        uploaded_url = upload_file('announcements', attachment_file, attachment_file.filename)
-        if uploaded_url:
-            attachment_url = uploaded_url
-            attachment_name = attachment_file.filename
-            attachment_type = attachment_file.filename.rsplit('.', 1)[-1].lower() if '.' in attachment_file.filename else 'file'
-    
-    link_url = request.form.get('link_url', '').strip()
-    link_text = request.form.get('link_text', '').strip()
-    
-    if not all([title, message]):
-        flash('Title and message required.', 'error')
-        return redirect(url_for('admin_announcements'))
-    
-    data = {
-        'title': title, 
-        'message': message, 
-        'batch': target_batch,
-        'attachment_url': attachment_url,
-        'attachment_name': attachment_name,
-        'attachment_type': attachment_type,
-        'link_url': link_url,
-        'link_text': link_text if link_text else 'Click here'
-    }
-    
-    result = db_update('announcements', object_id, data)
-    flash(
-        'Announcement updated successfully.' if result else 'Failed to update.',
-        'success' if result else 'error'
-    )
-    return redirect(url_for('admin_announcements'))
-
-@app.route('/admin/delete-announcement/<object_id>')
-@admin_required
-def delete_announcement(object_id):
-    announcement = db_get_by_id('announcements', object_id)
-    if announcement and announcement.get('attachment_url'):
-        if announcement.get('attachment_url'):
-            delete_storage_file(announcement.get('attachment_url'))
-    
-    result = db_delete('announcements', object_id)
-    flash(
-        'Announcement deleted successfully.' if result else 'Failed to delete.',
-        'success' if result else 'error'
-    )
-    return redirect(url_for('admin_announcements'))
-
-# ==================== ADMIN ANALYTICS ====================
-@app.route('/admin/analytics')
-@admin_required
-def admin_analytics():
-    students = db_get('students') or []
-    approved = [s for s in students if s.get('status') == 'approved']
-    pending = [s for s in students if s.get('status') == 'pending']
-    rejected = [s for s in students if s.get('status') == 'rejected']
-    batches_set = sorted(set(s.get('batch', 'Unknown') for s in students))
-    folders = db_get('folders') or []
-    videos = db_get('videos') or []
-    announcements = db_get('announcements') or []
-    total_streak = sum(safe_int(s.get('login_streak'), 0) for s in approved)
-    avg_streak = round(total_streak / len(approved), 2) if approved else 0
-    batch_activity = {}
-    for s in approved:
-        b = s.get('batch', 'Unknown')
-        if b not in batch_activity:
-            batch_activity[b] = {'count': 0, 'total_streak': 0}
-        batch_activity[b]['count'] += 1
-        batch_activity[b]['total_streak'] += safe_int(s.get('login_streak'), 0)
-    most_active = (
-        max(
-            batch_activity,
-            key=lambda x: batch_activity[x]['total_streak'] / batch_activity[x]['count']
-            if batch_activity[x]['count'] > 0 else 0
-        )
-        if batch_activity else 'N/A'
-    )
-    all_activities = sorted(db_get('student_activities') or [], key=lambda x: safe_str(x.get('created_at', '')), reverse=True)[:20]
-    for act in all_activities:
-        s = db_get_by_id('students', act.get('student_object_id', ''))
-        act['student_name'] = s.get('fullname', 'Unknown') if s else 'Unknown'
-        act['student_id_display'] = s.get('student_id', '') if s else ''
-    recent_students = sorted(students, key=lambda x: safe_str(x.get('created_at', '')), reverse=True)[:5]
-    return render_template('admin.html',
-                           active_tab='analytics',
-                           admin_name=session.get('admin_name', 'Administrator'),
-                           admin_email=session.get('admin_email', ''),
-                           admin_avatar=session.get('admin_avatar', ''),
-                           total_students=len(students),
-                           approved_students=len(approved),
-                           pending_students=len(pending),
-                           rejected_students=len(rejected),
-                           total_batches=len(batches_set),
-                           total_folders=len(folders),
-                           total_videos=len(videos),
-                           total_announcements=len(announcements),
-                           average_streak=avg_streak,
-                           most_active_batch=most_active,
-                           students=students,
-                           batches=batches_set,
-                           batch_activity=batch_activity,
-                           recent_students=recent_students,
-                           all_activities=all_activities,
-                           folders=folders,
-                           videos=videos,
-                           announcements=announcements,
-                           student_activities=[])
-
-# ==================== ADMIN PROFILE ====================
-@app.route('/admin/upload-avatar', methods=['POST'])
-@admin_required
-def admin_upload_avatar():
-    avatar_file = request.files.get('avatar')
-    if avatar_file and avatar_file.filename:
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-        file_ext = avatar_file.filename.rsplit('.', 1)[1].lower() if '.' in avatar_file.filename else ''
-        if file_ext not in allowed_extensions:
-            flash('Only image files are allowed (PNG, JPG, JPEG, GIF, WEBP).', 'error')
-            return redirect(url_for('admin_dashboard'))
+        .modal-dialog { 
+            background: linear-gradient(135deg, rgba(13, 21, 37, 0.95), rgba(3, 7, 18, 0.95));
+            border: 1px solid rgba(255,255,255,0.12); 
+            border-radius: var(--radius-xl); 
+            padding: 40px 32px; 
+            width: 100%; 
+            max-width: 700px; 
+            backdrop-filter: blur(40px); 
+            box-shadow: 0 30px 80px rgba(0,0,0,0.6); 
+            transform: translateY(30px) scale(0.94); 
+            transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1); 
+            position: relative; 
+            max-height: 88vh; 
+            overflow-y: auto; 
+        }
         
-        avatar_url = upload_file('avatars', avatar_file, avatar_file.filename)
-        if avatar_url:
-            admin_details = get_admin_details(session.get('admin_email', ''))
-            if admin_details:
-                old_avatar = admin_details.get('avatar')
-                if old_avatar:
-                    delete_storage_file(old_avatar)
-            
-            session['admin_avatar'] = avatar_url
-            result = create_or_update_admin_details(session.get('admin_email', ''), admin_avatar=avatar_url)
-            if result:
-                flash('Profile photo updated successfully!', 'success')
-            else:
-                flash('Photo uploaded but failed to save to database.', 'warning')
-        else:
-            flash('Failed to upload photo.', 'error')
-    else:
-        flash('Please select a file.', 'error')
-    return redirect(url_for('admin_dashboard'))
+        .modal-dialog.modal-lg { 
+            max-width: 700px; 
+        }
+        
+        .modal-overlay.active .modal-dialog { 
+            transform: translateY(0) scale(1); 
+        }
+        
+        .modal-dialog h2 { 
+            font-family: var(--font-display); 
+            font-size: 28px; 
+            font-weight: 700; 
+            color: var(--white); 
+            margin-bottom: 8px; 
+            text-align: center; 
+        }
+        
+        .modal-subtitle { 
+            text-align: center; 
+            color: var(--text-secondary); 
+            font-size: 14px; 
+            margin-bottom: 28px; 
+        }
+        
+        .modal-close { 
+            position: absolute; 
+            top: 16px; 
+            right: 16px; 
+            width: 36px; 
+            height: 36px; 
+            border-radius: 50%; 
+            background: rgba(255,255,255,0.04); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            color: var(--text-secondary); 
+            cursor: pointer; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            transition: all var(--transition-out); 
+        }
+        
+        .modal-close:hover { 
+            background: rgba(239,68,68,0.2); 
+            color: var(--error-glow); 
+            transform: rotate(90deg);
+        }
+        
+        .modal-form .form-group { 
+            margin-bottom: 18px; 
+        }
+        
+        .modal-form .form-group label { 
+            display: block; 
+            font-size: 12px; 
+            font-weight: 600; 
+            color: var(--text-muted); 
+            margin-bottom: 8px; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+        }
+        
+        .modal-form .form-group input, 
+        .modal-form .form-group select { 
+            width: 100%; 
+            padding: 12px 16px; 
+            background: rgba(255,255,255,0.05); 
+            border: 1px solid rgba(255,255,255,0.12); 
+            border-radius: var(--radius); 
+            color: var(--white); 
+            font-size: 14px; 
+            outline: none; 
+            transition: all var(--transition-out);
+        }
+        
+        .modal-form .form-group select {
+            cursor: pointer;
+            background: rgba(10, 15, 26, 0.95);
+        }
+        
+        .modal-form .form-group select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 12px;
+        }
+        
+        .modal-form .form-group select option:hover {
+            background: var(--accent);
+        }
+        
+        .modal-form .form-group input:focus, 
+        .modal-form .form-group select:focus { 
+            border-color: var(--accent); 
+            box-shadow: 0 0 0 4px rgba(99,102,241,0.1); 
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        .modal-form .btn { 
+            width: 100%; 
+            justify-content: center; 
+            padding: 14px; 
+            font-size: 15px; 
+            margin-top: 10px; 
+        }
+        
+        .modal-footer-text { 
+            text-align: center; 
+            margin-top: 20px; 
+            font-size: 13px; 
+            color: var(--text-secondary); 
+        }
+        
+        .modal-footer-text a { 
+            color: var(--accent-glow); 
+            text-decoration: none; 
+            font-weight: 600; 
+            cursor: pointer; 
+        }
+        
+        .modal-footer-text a:hover {
+            text-decoration: underline;
+        }
+        
+        .modal-note { 
+            background: rgba(99,102,241,0.08); 
+            border: 1px solid rgba(99,102,241,0.2); 
+            border-radius: var(--radius); 
+            padding: 12px 16px; 
+            margin-bottom: 24px; 
+            font-size: 12px; 
+            color: var(--accent-glow); 
+            text-align: center; 
+        }
+        
+        .success-popup { 
+            text-align: center; 
+        }
+        
+        .success-popup .success-icon { 
+            width: 80px; 
+            height: 80px; 
+            border-radius: 50%; 
+            margin: 0 auto 20px; 
+            background: rgba(16,185,129,0.12); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 42px; 
+            color: var(--success-glow); 
+            animation: successPop 0.7s cubic-bezier(0.34,1.56,0.64,1); 
+        }
+        
+        @keyframes successPop { 
+            0% { transform: scale(0); } 
+            60% { transform: scale(1.2); } 
+            100% { transform: scale(1); } 
+        }
+        
+        .flash-container { 
+            position: fixed; 
+            top: 100px; 
+            right: 30px; 
+            z-index: 9999; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            max-width: 400px; 
+        }
+        
+        .flash-message { 
+            padding: 14px 20px; 
+            border-radius: var(--radius); 
+            font-weight: 500; 
+            font-size: 13px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            backdrop-filter: blur(30px); 
+            animation: flashSlideIn 0.4s ease, flashFadeOut 0.4s ease 3.6s forwards; 
+            box-shadow: var(--shadow-lg); 
+            border: 1px solid rgba(255,255,255,0.08); 
+        }
+        
+        .flash-message.success { 
+            background: rgba(16,185,129,0.18); 
+            color: var(--success-glow); 
+            border-color: rgba(16,185,129,0.25); 
+        }
+        
+        .flash-message.error { 
+            background: rgba(239,68,68,0.18); 
+            color: var(--error-glow); 
+            border-color: rgba(239,68,68,0.25); 
+        }
+        
+        @keyframes flashSlideIn { 
+            from { transform: translateX(120%); opacity: 0; } 
+            to { transform: translateX(0); opacity: 1; } 
+        }
+        
+        @keyframes flashFadeOut { 
+            from { transform: translateX(0); opacity: 1; } 
+            to { transform: translateX(120%); opacity: 0; } 
+        }
+        
+        @media (max-width: 1024px) { 
+            .hero-container { grid-template-columns: 1fr; text-align: center; } 
+            .hero p { margin-left: auto; margin-right: auto; } 
+            .hero-visual { display: none; } 
+            .about-grid { grid-template-columns: 1fr; } 
+            .contact-grid { grid-template-columns: 1fr; } 
+            .footer-grid { grid-template-columns: 1fr 1fr; } 
+            .form-row { grid-template-columns: 1fr; gap: 0; }
+        }
+        
+        @media (max-width: 768px) { 
+            .navbar { width: 96%; top: 10px; } 
+            .nav-links { display: none; position: fixed; top: 70px; left: 16px; right: 16px; background: rgba(13,21,37,0.98); flex-direction: column; padding: 16px; border-radius: var(--radius-lg); } 
+            .nav-links.mobile-active { display: flex; } 
+            .mobile-menu-btn { display: block; } 
+            .hero { padding: 120px 16px 60px; } 
+            .section { padding: 60px 16px; } 
+            .footer-grid { grid-template-columns: 1fr; } 
+            .modal-dialog { padding: 32px 20px; margin: 16px; }
+        }
+        
+        @media (max-width: 480px) { 
+            .hero h1 { font-size: 30px; } 
+            .hero-buttons { flex-direction: column; align-items: center; } 
+            .hero-buttons .btn { width: 100%; justify-content: center; } 
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-bg"><div class="ambient-orb ambient-orb-1"></div><div class="ambient-orb ambient-orb-2"></div><div class="ambient-orb ambient-orb-3"></div></div>
+    <div class="grid-overlay"></div>
 
-@app.route('/admin/update-profile', methods=['POST'])
-@admin_required
-def admin_update_profile():
-    name = request.form.get('admin_name', '').strip()
-    if name:
-        session['admin_name'] = name
-        result = create_or_update_admin_details(session.get('admin_email', ''), admin_name=name)
-        if result:
-            flash('Profile updated successfully!', 'success')
-        else:
-            flash('Failed to update profile.', 'error')
-    else:
-        flash('Name cannot be empty.', 'error')
-    return redirect(url_for('admin_dashboard'))
+    <!-- Navbar -->
+    <nav class="navbar" id="navbar">
+        <div class="navbar-container">
+            <a href="#" class="navbar-brand">
+                <img src="https://play-lh.googleusercontent.com/_kvdk0-jX5RDlc9eW903Vx59JepDDr0skF693OEugwIHvEggcKZBPwIxjNKm576rbQ=w240-h480-rw" alt="Slokam Technologies Logo" class="logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div class="logo-hex" style="display:none; width:38px; height:38px; background:linear-gradient(135deg,var(--accent),var(--accent-secondary)); clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%); align-items:center; justify-content:center; font-size:16px; color:white"><i class="fas fa-infinity"></i></div>
+                Slokam Technologies
+            </a>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#home" onclick="closeMobileMenu()">Home</a></li>
+                <li><a href="#about" onclick="closeMobileMenu()">About</a></li>
+                <li><a href="#features" onclick="closeMobileMenu()">Features</a></li>
+                <li><a href="#contact" onclick="closeMobileMenu()">Contact</a></li>
+            </ul>
+            <div class="nav-buttons">
+                <a href="{{ url_for('demo_login') }}" class="btn btn-demo btn-sm"><i class="fas fa-play-circle"></i> <span class="btn-text">Demo</span></a>
+                <button class="btn btn-ghost btn-sm" onclick="openStudentLogin()"><i class="fas fa-sign-in-alt"></i> <span class="btn-text">Login</span></button>
+                <button class="btn btn-primary btn-sm" onclick="openRegister()"><i class="fas fa-user-plus"></i> <span class="btn-text">Register</span></button>
+                <button class="btn btn-gold btn-sm" onclick="openAdminLogin()"><i class="fas fa-shield-halved"></i> <span class="btn-text">Admin</span></button>
+                <button class="mobile-menu-btn" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+            </div>
+        </div>
+    </nav>
 
-# ==================== ERROR HANDLERS ====================
-@app.errorhandler(404)
-def not_found_error(error):
-    return render_template('base.html'), 404
+    <!-- Flash Messages -->
+    <div class="flash-container" id="flashContainer">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, msg in messages %}<div class="flash-message {{ category }}">{% if category == 'success' %}<i class="fas fa-circle-check"></i>{% elif category == 'error' %}<i class="fas fa-circle-exclamation"></i>{% else %}<i class="fas fa-circle-info"></i>{% endif %}{{ msg }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
 
-@app.errorhandler(500)
-def internal_error(error):
-    return render_template('base.html'), 500
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="hero-container">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="live-dot"></span>
+                    <span>✨ Live Learning Platform</span>
+                </div>
+                <h1>Master Your Skills With <span class="gradient-text">Slokam Technologies</span></h1>
+                <p>Access recorded classes, notes, exercises, practice problems and track your learning journey. Learn from industry experts and build real-world projects.</p>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary btn-lg" onclick="openRegister()"><i class="fas fa-rocket"></i> Get Started Free</button>
+                    <button class="btn btn-ghost btn-lg" onclick="openStudentLogin()"><i class="fas fa-sign-in-alt"></i> Student Login</button>
+                    <a href="{{ url_for('demo_login') }}" class="btn btn-demo btn-lg"><i class="fas fa-play-circle"></i> Try Demo</a>
+                </div>
+            </div>
+            <div class="hero-visual"><div class="hero-card"><div class="hero-card-dots"><span></span><span></span><span></span><span style="color:var(--text-muted);font-size:11px;margin-left:8px">live preview</span></div><div style="color:var(--white);font-weight:600;font-size:14px">Your Progress</div><div class="hero-card-line"><div class="hero-card-line-fill"></div></div><div style="color:var(--text-secondary);font-size:11px">82% Completed</div><div class="hero-card-grid"><div class="hero-card-stat"><div class="val">12</div><div class="lbl">Videos</div></div><div class="hero-card-stat"><div class="val">8</div><div class="lbl">Exercises</div></div><div class="hero-card-stat"><div class="val">7</div><div class="lbl">Day Streak</div></div><div class="hero-card-stat"><div class="val">A+</div><div class="lbl">Performance</div></div></div></div></div>
+        </div>
+    </section>
 
-# ==================== MAIN ====================
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    <!-- Features Section -->
+    <section class="section section-dark" id="features">
+        <div class="section-container">
+            <div class="section-header"><span class="section-tag">✦ Platform Features</span><h2 class="section-title">Everything You Need to Succeed</h2><p class="section-subtitle">Comprehensive learning tools designed to help you master new skills efficiently.</p></div>
+            <div class="features-grid">
+                <div class="feature-card"><div class="feature-icon icon-indigo"><i class="fas fa-play-circle"></i></div><h3>Video Learning</h3><p>Access high-quality recorded classes anytime, anywhere. Learn at your own pace.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-purple"><i class="fas fa-file-arrow-down"></i></div><h3>Download Notes</h3><p>Download comprehensive notes for every topic. Review key concepts offline.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-emerald"><i class="fas fa-list-check"></i></div><h3>Exercises</h3><p>Practice with curated exercises after each module to reinforce learning.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-cyan"><i class="fas fa-code"></i></div><h3>Practice Problems</h3><p>Challenge yourself with real-world problems and build confidence.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-amber"><i class="fas fa-bullhorn"></i></div><h3>Announcements</h3><p>Stay updated with important announcements and never miss deadlines.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-indigo"><i class="fas fa-fire"></i></div><h3>Login Streak</h3><p>Build consistency with streak tracking and stay motivated.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-purple"><i class="fas fa-users"></i></div><h3>Batch Learning</h3><p>Learn alongside peers in your batch and grow together.</p></div>
+                <div class="feature-card"><div class="feature-icon icon-emerald"><i class="fas fa-chart-line"></i></div><h3>Progress Tracking</h3><p>Monitor your learning with detailed analytics and insights.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="section section-dark" id="about">
+        <div class="section-container">
+            <div class="about-grid">
+                <div class="about-content">
+                    <span class="section-tag">✦ About Us</span>
+                    <h2>About Slokam Technologies</h2>
+                    <p>Slokam Technologies is a premier learning management platform dedicated to empowering students and professionals with cutting-edge technical skills. We bridge the gap between academic knowledge and industry requirements.</p>
+                    <p>Our mission is to make quality technical education accessible to everyone. With expert instructors, curated content, and a supportive community, we help learners achieve their career goals.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="section" id="contact">
+        <div class="section-container">
+            <div class="section-header"><span class="section-tag">✦ Get In Touch</span><h2 class="section-title">Contact Us</h2><p class="section-subtitle">Have questions? We'd love to hear from you. Reach out anytime.</p></div>
+            <div class="contact-grid">
+                <div class="contact-info">
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fas fa-envelope"></i></div><div><h4>Email</h4><span>support@slokamtechnologies.com</span></div></div>
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fab fa-whatsapp"></i></div><div><h4>WhatsApp</h4><span>+91 8881178888</span></div></div>
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fas fa-location-dot"></i></div><div><h4>Address</h4><span>Padmaja Apartment, Sanjeeva Reddy Nagar, Hyderabad, Telangana 500038</span></div></div>
+                    <div class="contact-card"><div class="contact-icon-circle"><i class="fab fa-youtube"></i></div><div><h4>YouTube Channel</h4><span><a href="https://www.youtube.com/@SLokamTech" target="_blank" style="color: var(--accent-glow); text-decoration: none;">youtube.com/@SLokamTech</a></span></div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-grid">
+            <div class="footer-brand"><h3>Slokam Technologies</h3><p>Learn. Practice. Build. Grow.<br>Empowering the next generation of tech professionals.</p><div class="social-links" style="margin-top:16px"><a href="#"><i class="fab fa-linkedin-in"></i></a><a href="#"><i class="fab fa-github"></i></a><a href="#"><i class="fab fa-instagram"></i></a><a href="#"><i class="fab fa-youtube"></i></a></div></div>
+            <div class="footer-links"><h4>Quick Links</h4><ul><li><a href="#home">Home</a></li><li><a href="#about">About</a></li><li><a href="#features">Features</a></li><li><a href="#contact">Contact</a></li><li><a href="{{ url_for('demo_login') }}">Demo Portal</a></li></ul></div>
+            <div class="footer-links"><h4>Resources</h4><ul><li><a href="#">Video Library</a></li><li><a href="#">Practice Problems</a></li><li><a href="#">Study Notes</a></li><li><a href="#">Learning Paths</a></li></ul></div>
+            <div class="footer-links"><h4>Support</h4><ul><li><a href="#">Help Center</a></li><li><a href="#">FAQs</a></li><li><a href="#">Privacy Policy</a></li><li><a href="#">Terms of Service</a></li></ul></div>
+        </div>
+        <div class="footer-bottom"><span>&copy; 2026 Slokam Technologies. All Rights Reserved.</span><span>Made with <i class="fas fa-heart" style="color:var(--error-glow)"></i> for learners worldwide</span></div>
+    </footer>
+
+    <!-- Modals - OTP MODALS REMOVED -->
+    <div class="modal-overlay" id="studentLoginModal"><div class="modal-dialog"><button class="modal-close" onclick="closeStudentLogin()"><i class="fas fa-times"></i></button><h2>Student Login</h2><p class="modal-subtitle">Welcome back! Continue your learning journey.</p><form class="modal-form" action="{{ url_for('login') }}" method="POST"><div class="form-group"><label>Email Address</label><input type="email" name="email" placeholder="your@email.com" required></div><div class="form-group"><label>Password</label><input type="password" name="password" placeholder="••••••••" required></div><button type="submit" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Login</button></form><div class="modal-footer-text"><a href="#" onclick="closeStudentLogin();openForgotPassword()">Forgot Password?</a></div><div class="modal-footer-text">Don't have an account? <a onclick="closeStudentLogin();openRegister()">Register here</a></div></div></div>
+    
+    <div class="modal-overlay" id="registerModal"><div class="modal-dialog modal-lg"><button class="modal-close" onclick="closeRegister()"><i class="fas fa-times"></i></button><h2>Create Account</h2><p class="modal-subtitle">Join Slokam Technologies and start learning today!</p><div class="modal-note"><i class="fas fa-circle-info"></i> Student ID and Batch are auto-generated. Account requires admin approval.</div><form class="modal-form" action="{{ url_for('register') }}" method="POST"><div class="form-row"><div class="form-group"><label>Full Name *</label><input type="text" name="fullname" placeholder="Enter your full name" required></div><div class="form-group"><label>Email Address *</label><input type="email" name="email" placeholder="your@email.com" required></div></div><div class="form-row"><div class="form-group"><label>Password *</label><input type="password" name="password" placeholder="Min 6 characters" required minlength="6"></div><div class="form-group"><label>Confirm Password *</label><input type="password" name="confirm_password" placeholder="Re-enter password" required minlength="6"></div></div><div class="form-row"><div class="form-group"><label>Mobile Number</label><input type="tel" name="mobile_number" placeholder="+91 98765 43210"></div><div class="form-group"><label>Parent Mobile Number</label><input type="tel" name="parent_mobile" placeholder="+91 98765 43210"></div></div><div class="form-row"><div class="form-group"><label>College Name</label><input type="text" name="college_name" placeholder="Your College/University Name"></div><div class="form-group"><label>Qualification *</label><select name="qualification" required><option value="" disabled selected>Select Qualification</option><option value="B.Tech">B.Tech</option><option value="M.Tech">M.Tech</option><option value="BCA">BCA</option><option value="MCA">MCA</option><option value="B.Sc">B.Sc</option><option value="M.Sc">M.Sc</option><option value="Diploma">Diploma</option><option value="MBA">MBA</option><option value="PG Diploma">PG Diploma</option><option value="Other">Other</option></select></div></div><div class="form-row"><div class="form-group"><label>Passed Out Year</label><input type="text" name="passed_out_year" placeholder="e.g., 2024, 2025"></div><div class="form-group"><label>Joined Month & Year</label><input type="text" name="joined_month" placeholder="e.g., May 2026 (optional)"></div></div><button type="submit" class="btn btn-primary"><i class="fas fa-user-plus"></i> Create Account</button></form><div class="modal-footer-text">Already have an account? <a onclick="closeRegister();openStudentLogin()">Login here</a></div></div></div>
+    
+    <div class="modal-overlay" id="forgotPasswordModal"><div class="modal-dialog"><button class="modal-close" onclick="closeForgotPassword()"><i class="fas fa-times"></i></button><h2>Forgot Password</h2><p class="modal-subtitle">Enter your registered email to reset password</p><form class="modal-form" action="{{ url_for('forgot_password') }}" method="POST"><div class="form-group"><label>Email Address</label><input type="email" name="email" placeholder="your@email.com" required></div><button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send Reset Link</button></form><div class="modal-footer-text">Remember password? <a onclick="closeForgotPassword();openStudentLogin()">Login here</a></div></div></div>
+    
+    <div class="modal-overlay" id="resetPasswordModal"><div class="modal-dialog"><button class="modal-close" onclick="closeResetPassword()"><i class="fas fa-times"></i></button><h2>Reset Password</h2><p class="modal-subtitle">Enter your new password</p><form class="modal-form" action="{{ url_for('reset_password') }}" method="POST"><div class="form-group"><label>New Password</label><input type="password" name="new_password" placeholder="Min 6 characters" required minlength="6"></div><button type="submit" class="btn btn-primary"><i class="fas fa-lock"></i> Reset Password</button></form><div class="modal-footer-text">Remember password? <a onclick="closeResetPassword();openStudentLogin()">Login here</a></div></div></div>
+    
+    <div class="modal-overlay" id="adminLoginModal"><div class="modal-dialog"><button class="modal-close" onclick="closeAdminLogin()"><i class="fas fa-times"></i></button><h2>Admin Login</h2><p class="modal-subtitle">Secure access for administrators only.</p><form class="modal-form" action="{{ url_for('admin_login') }}" method="POST"><div class="form-group"><label>Admin Email</label><input type="email" name="email" placeholder="admin@slokamtechnologies.com" required></div><div class="form-group"><label>Admin Password</label><input type="password" name="password" placeholder="••••••••" required></div><button type="submit" class="btn btn-gold"><i class="fas fa-shield-halved"></i> Admin Login</button></form></div></div>
+    
+    <div class="modal-overlay" id="successPopup"><div class="modal-dialog success-popup"><button class="modal-close" onclick="closeSuccessPopup()"><i class="fas fa-times"></i></button><div class="success-icon"><i class="fas fa-circle-check"></i></div><h2>Registration Successful!</h2><p class="modal-subtitle">Your account has been created and is pending admin approval.</p><p style="color:var(--text-muted);font-size:12px;margin-top:6px">Once approved, you can login and access all learning materials.</p><button class="btn btn-primary" style="margin-top:18px" onclick="closeSuccessPopup();openStudentLogin()"><i class="fas fa-sign-in-alt"></i> Go to Login</button></div></div>
+
+    <script>
+        function openStudentLogin() { document.getElementById('studentLoginModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeStudentLogin() { document.getElementById('studentLoginModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openRegister() { document.getElementById('registerModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeRegister() { document.getElementById('registerModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openAdminLogin() { document.getElementById('adminLoginModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeAdminLogin() { document.getElementById('adminLoginModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openForgotPassword() { document.getElementById('forgotPasswordModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeForgotPassword() { document.getElementById('forgotPasswordModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openResetPassword() { document.getElementById('resetPasswordModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeResetPassword() { document.getElementById('resetPasswordModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function openSuccessPopup() { document.getElementById('successPopup').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeSuccessPopup() { document.getElementById('successPopup').classList.remove('active'); document.body.style.overflow = ''; }
+        
+        // Show reset password modal after forgot password submission
+        {% if session.get('reset_email') %}
+        document.addEventListener('DOMContentLoaded', function() {
+            closeForgotPassword();
+            setTimeout(openResetPassword, 300);
+        });
+        {% endif %}
+        
+        document.querySelectorAll('.modal-overlay').forEach(o => { o.addEventListener('click', function(e) { if (e.target === this) { this.classList.remove('active'); document.body.style.overflow = ''; } }); });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active')); document.body.style.overflow = ''; } });
+        
+        function toggleMobileMenu() { document.getElementById('navLinks').classList.toggle('mobile-active'); }
+        function closeMobileMenu() { document.getElementById('navLinks').classList.remove('mobile-active'); }
+        
+        window.addEventListener('scroll', function() { document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 50); });
+        
+        document.addEventListener('DOMContentLoaded', function() { 
+            document.querySelectorAll('.flash-message').forEach(m => { 
+                if (m.classList.contains('success') && (m.textContent.toLowerCase().includes('registration successful') || m.textContent.toLowerCase().includes('registered'))) { 
+                    setTimeout(openSuccessPopup, 500); 
+                } 
+                setTimeout(() => { 
+                    m.style.opacity = '0'; 
+                    m.style.transform = 'translateX(120%)'; 
+                    setTimeout(() => m.remove(), 400); 
+                }, 4000); 
+            }); 
+        });
+        
+        document.querySelectorAll('a[href^="#"]').forEach(a => { a.addEventListener('click', function(e) { e.preventDefault(); const target = document.querySelector(this.getAttribute('href')); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); });
+    </script>
+</body>
+</html>
