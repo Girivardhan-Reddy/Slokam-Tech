@@ -2,7 +2,7 @@ import os
 import random
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -47,7 +47,7 @@ def allowed_file(filename):
 # ==================== TIMEZONE HELPER ====================
 def get_ist_time():
     """Get current time in IST (UTC+5:30) for storage"""
-    utc_now = datetime.utcnow()
+    utc_now = datetime.now(timezone.utc)
     ist_now = utc_now + timedelta(hours=5, minutes=30)
     return ist_now
 
@@ -323,6 +323,13 @@ def is_url(value):
         return False
     return str(value).startswith('http://') or str(value).startswith('https://')
 
+# Fixed: Generate unique student ID using timestamp + random
+def generate_student_id():
+    """Generate a unique student ID using timestamp and random number"""
+    timestamp = get_ist_time().strftime('%y%m%d%H%M%S')
+    random_num = random.randint(1000, 9999)
+    return f"STU{timestamp}{random_num}"
+
 # Register Jinja2 filters
 app.jinja_env.globals['format_date'] = format_date
 app.jinja_env.globals['format_time_ago'] = format_time_ago
@@ -330,11 +337,6 @@ app.jinja_env.globals['is_demo_true'] = is_demo_true
 app.jinja_env.globals['is_url'] = is_url
 
 # ==================== BUSINESS LOGIC HELPERS ====================
-def generate_student_id():
-    students = db_get('students')
-    count = len(students) + 1 if students else 1
-    return f"STU2026{count:04d}"
-
 def get_joined_month():
     return get_ist_time().strftime("%B %Y")
 
@@ -867,6 +869,7 @@ def admin_students():
                            average_streak=0,
                            most_active_batch='N/A')
 
+# ==================== ADMIN STUDENT DETAIL AND EDIT ROUTES ====================
 @app.route('/admin/student/<object_id>')
 @admin_required
 def admin_student_detail(object_id):
