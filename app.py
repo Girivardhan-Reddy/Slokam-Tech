@@ -11,8 +11,7 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+import resend
 
 load_dotenv()
 
@@ -33,12 +32,15 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ==================== SENDGRID CONFIGURATION ====================
-SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
-FROM_EMAIL = os.getenv('FROM_EMAIL', 'girivennapusa8@gmail.com')
+# ==================== RESEND CONFIGURATION ====================
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
+FROM_EMAIL = os.getenv('FROM_EMAIL', 'onboarding@resend.dev')  # Resend's default sandbox domain
 
-if not SENDGRID_API_KEY:
-    logger.warning("SendGrid API key not configured. Email sending will fallback to console.")
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
+    logger.info("Resend email service configured")
+else:
+    logger.warning("RESEND_API_KEY not configured. Email sending will fallback to console.")
 
 # ==================== ALLOWED FILE EXTENSIONS ====================
 ALLOWED_EXTENSIONS = {
@@ -164,10 +166,10 @@ def get_public_url(bucket_name, filename):
         logger.error(f"Error getting public URL: {e}")
         return None
 
-# ==================== SENDGRID EMAIL HELPER ====================
+# ==================== RESEND EMAIL HELPER ====================
 def send_otp_email(email, otp, purpose="verification"):
     """
-    Send OTP email using SendGrid API (works on Render free tier)
+    Send OTP email using Resend API (works on Render free tier)
     
     Args:
         email: Recipient email address
@@ -177,9 +179,9 @@ def send_otp_email(email, otp, purpose="verification"):
     Returns:
         True if email sent successfully, False otherwise
     """
-    # Check if SendGrid is configured
-    if not SENDGRID_API_KEY:
-        logger.warning(f"SendGrid not configured. OTP for {email}: {otp}")
+    # Check if Resend is configured
+    if not RESEND_API_KEY:
+        logger.warning(f"Resend not configured. OTP for {email}: {otp}")
         return True
     
     try:
@@ -272,28 +274,21 @@ def send_otp_email(email, otp, purpose="verification"):
         </html>
         """
         
-        # Create message
-        message = Mail(
-            from_email=FROM_EMAIL,
-            to_emails=email,
-            subject=f"Slokam Technology - {purpose.title()} OTP",
-            html_content=html_content
-        )
+        # Send email using Resend
+        params = {
+            "from": FROM_EMAIL,
+            "to": [email],
+            "subject": f"Slokam Technology - {purpose.title()} OTP",
+            "html": html_content,
+        }
         
-        # Send email
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
+        response = resend.Emails.send(params)
         
-        if response.status_code in [200, 202]:
-            logger.info(f"OTP email sent successfully to {email} via SendGrid")
-            return True
-        else:
-            logger.error(f"SendGrid error: Status code {response.status_code}")
-            logger.info(f"⚠ OTP for {email}: {otp} (use this for testing)")
-            return True
-            
+        logger.info(f"OTP email sent successfully to {email} via Resend. ID: {response}")
+        return True
+        
     except Exception as e:
-        logger.error(f"SendGrid email error for {email}: {str(e)}")
+        logger.error(f"Resend email error for {email}: {str(e)}")
         logger.info(f"⚠ OTP for {email}: {otp} (use this for testing)")
         return True
 
