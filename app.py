@@ -13,14 +13,6 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import resend
 
-# Set timezone to IST (Indian Standard Time)
-os.environ['TZ'] = 'Asia/Kolkata'
-try:
-    from time import tzset
-    tzset()
-except:
-    pass  # Windows doesn't support tzset
-
 load_dotenv()
 
 app = Flask(__name__)
@@ -65,13 +57,13 @@ def allowed_file(filename):
 
 # ==================== TIMEZONE HELPER ====================
 def get_ist_time():
-    """Get current time in IST (UTC+5:30)"""
+    """Get current time in IST (UTC+5:30) for storage"""
     utc_now = datetime.utcnow()
     ist_now = utc_now + timedelta(hours=5, minutes=30)
     return ist_now
 
 def get_ist_timestamp():
-    """Return current IST time as ISO string"""
+    """Return current IST time as ISO string for database storage"""
     return get_ist_time().isoformat()
 
 # ==================== SUPABASE STORAGE HELPERS ====================
@@ -393,26 +385,28 @@ def safe_str(value, default=''):
     return str(value)
 
 def format_date(value):
-    """Format date to IST timezone"""
+    """Format date for display - database already stores IST"""
     if not value:
         return '-'
     try:
         if isinstance(value, str):
             if 'T' in value:
                 dt = datetime.fromisoformat(value.replace('Z', '+00:00').split('+')[0].split('.')[0])
-                ist_time = dt + timedelta(hours=5, minutes=30)
-                return ist_time.strftime('%d %b %Y, %I:%M %p')
-            elif len(value) >= 10:
-                return value[:10]
+            else:
+                return value[:16] if len(value) > 16 else value
         elif isinstance(value, datetime):
-            ist_time = value + timedelta(hours=5, minutes=30) if value.tzinfo is None else value
-            return ist_time.strftime('%d %b %Y, %I:%M %p')
-        return str(value)[:16] if value else '-'
-    except:
+            dt = value
+        else:
+            return str(value)[:16] if value else '-'
+        
+        # Database already stores IST, display directly
+        return dt.strftime('%d %b %Y, %I:%M %p')
+    except Exception as e:
+        logger.error(f"Date formatting error: {e}")
         return str(value)[:16] if value else '-'
 
 def format_time_ago(value):
-    """Format time ago in IST"""
+    """Format time ago - database already stores IST"""
     if not value:
         return '-'
     try:
@@ -426,11 +420,10 @@ def format_time_ago(value):
         else:
             return str(value)
         
-        # Convert to IST
+        # Use current IST time
         now = get_ist_time()
-        dt_ist = dt + timedelta(hours=5, minutes=30)
         
-        diff = now - dt_ist
+        diff = now - dt
         if diff.days > 365:
             return f"{diff.days // 365}y ago"
         elif diff.days > 30:
@@ -443,7 +436,8 @@ def format_time_ago(value):
             return f"{diff.seconds // 60}m ago"
         else:
             return "Just now"
-    except:
+    except Exception as e:
+        logger.error(f"Time ago formatting error: {e}")
         return str(value)[:16] if value else '-'
 
 def get_batch_from_joined_month(joined_month):
