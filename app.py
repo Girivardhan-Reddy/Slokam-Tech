@@ -13,6 +13,14 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import resend
 
+# Set timezone to IST (Indian Standard Time)
+os.environ['TZ'] = 'Asia/Kolkata'
+try:
+    from time import tzset
+    tzset()
+except:
+    pass  # Windows doesn't support tzset
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -34,7 +42,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ==================== RESEND CONFIGURATION ====================
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
-FROM_EMAIL = os.getenv('FROM_EMAIL', 'onboarding@resend.dev')  # Resend's default sandbox domain
+FROM_EMAIL = os.getenv('FROM_EMAIL', 'onboarding@resend.dev')
 
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
@@ -54,6 +62,17 @@ def allowed_file(filename):
     if not filename or '.' not in filename:
         return False
     return filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# ==================== TIMEZONE HELPER ====================
+def get_ist_time():
+    """Get current time in IST (UTC+5:30)"""
+    utc_now = datetime.utcnow()
+    ist_now = utc_now + timedelta(hours=5, minutes=30)
+    return ist_now
+
+def get_ist_timestamp():
+    """Return current IST time as ISO string"""
+    return get_ist_time().isoformat()
 
 # ==================== SUPABASE STORAGE HELPERS ====================
 def upload_file(bucket_name, file_data, original_filename):
@@ -86,7 +105,7 @@ def upload_file(bucket_name, file_data, original_filename):
         
         # Generate unique filename
         file_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
-        unique_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        unique_filename = f"{get_ist_time().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{file_ext}"
         
         # Upload to Supabase Storage
         logger.info(f"Uploading file '{original_filename}' to bucket '{bucket_name}' as '{unique_filename}'")
@@ -127,9 +146,7 @@ def delete_storage_file(file_url):
             return False
         
         # Extract bucket and filename from URL
-        # URL format: https://PROJECT_ID.supabase.co/storage/v1/object/public/bucket_name/filename
         try:
-            # Split by '/public/'
             url_parts = file_url.split('/public/')
             if len(url_parts) != 2:
                 logger.warning(f"Invalid storage URL format: {file_url}")
@@ -143,7 +160,6 @@ def delete_storage_file(file_url):
                 logger.warning(f"Could not extract bucket or filename from URL: {file_url}")
                 return False
             
-            # Delete from Supabase Storage
             logger.info(f"Deleting file '{filename}' from bucket '{bucket_name}'")
             supabase.storage.from_(bucket_name).remove([filename])
             
@@ -179,13 +195,11 @@ def send_otp_email(email, otp, purpose="verification"):
     Returns:
         True if email sent successfully, False otherwise
     """
-    # Check if Resend is configured
     if not RESEND_API_KEY:
         logger.warning(f"Resend not configured. OTP for {email}: {otp}")
         return True
     
     try:
-        # Create HTML email content
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -274,7 +288,6 @@ def send_otp_email(email, otp, purpose="verification"):
         </html>
         """
         
-        # Send email using Resend
         params = {
             "from": FROM_EMAIL,
             "to": [email],
@@ -380,22 +393,26 @@ def safe_str(value, default=''):
     return str(value)
 
 def format_date(value):
+    """Format date to IST timezone"""
     if not value:
         return '-'
     try:
         if isinstance(value, str):
             if 'T' in value:
                 dt = datetime.fromisoformat(value.replace('Z', '+00:00').split('+')[0].split('.')[0])
-                return dt.strftime('%d %b %Y, %I:%M %p')
+                ist_time = dt + timedelta(hours=5, minutes=30)
+                return ist_time.strftime('%d %b %Y, %I:%M %p')
             elif len(value) >= 10:
                 return value[:10]
         elif isinstance(value, datetime):
-            return value.strftime('%d %b %Y, %I:%M %p')
+            ist_time = value + timedelta(hours=5, minutes=30) if value.tzinfo is None else value
+            return ist_time.strftime('%d %b %Y, %I:%M %p')
         return str(value)[:16] if value else '-'
     except:
         return str(value)[:16] if value else '-'
 
 def format_time_ago(value):
+    """Format time ago in IST"""
     if not value:
         return '-'
     try:
@@ -408,8 +425,12 @@ def format_time_ago(value):
             dt = value
         else:
             return str(value)
-        now = datetime.now()
-        diff = now - dt
+        
+        # Convert to IST
+        now = get_ist_time()
+        dt_ist = dt + timedelta(hours=5, minutes=30)
+        
+        diff = now - dt_ist
         if diff.days > 365:
             return f"{diff.days // 365}y ago"
         elif diff.days > 30:
@@ -427,7 +448,7 @@ def format_time_ago(value):
 
 def get_batch_from_joined_month(joined_month):
     if not joined_month:
-        return f"{datetime.now().strftime('%B %Y')} Batch"
+        return f"{get_ist_time().strftime('%B %Y')} Batch"
     return f"{joined_month} Batch"
 
 def is_demo_true(value):
@@ -445,6 +466,7 @@ def is_url(value):
 def generate_otp():
     return str(random.randint(100000, 999999))
 
+# Register Jinja2 filters
 app.jinja_env.globals['format_date'] = format_date
 app.jinja_env.globals['format_time_ago'] = format_time_ago
 app.jinja_env.globals['is_demo_true'] = is_demo_true
@@ -457,18 +479,18 @@ def generate_student_id():
     return f"STU2026{count:04d}"
 
 def get_joined_month():
-    return datetime.now().strftime("%B %Y")
+    return get_ist_time().strftime("%B %Y")
 
 def update_login_streak(student):
     student_id = student['id']
-    now = datetime.now().strftime('%Y-%m-%d')
+    now = get_ist_time().strftime('%Y-%m-%d')
     last_login = student.get('last_login')
     streak = safe_int(student.get('login_streak'), 0)
     if last_login and str(last_login) not in ['None', '', 'null']:
         try:
             last_str = str(last_login)[:10]
             last_date = datetime.strptime(last_str, '%Y-%m-%d').date()
-            today = datetime.now().date()
+            today = get_ist_time().date()
             diff = (today - last_date).days
             if diff == 0:
                 pass
@@ -490,7 +512,7 @@ def log_student_activity(student_object_id, action_type, description):
             'student_object_id': student_object_id,
             'action_type': action_type,
             'description': description,
-            'created_at': datetime.now().isoformat()
+            'created_at': get_ist_timestamp()
         })
     except Exception as e:
         logger.error(f"Log activity error: {e}")
@@ -502,7 +524,7 @@ def get_admin_details(admin_email):
 def create_or_update_admin_details(admin_email, admin_name=None, admin_avatar=None):
     existing_admin = get_admin_details(admin_email)
     if existing_admin:
-        update_data = {'updated_at': datetime.now().isoformat()}
+        update_data = {'updated_at': get_ist_timestamp()}
         if admin_name is not None:
             update_data['name'] = admin_name
         if admin_avatar is not None:
@@ -514,8 +536,8 @@ def create_or_update_admin_details(admin_email, admin_name=None, admin_avatar=No
             'email': admin_email,
             'name': admin_name if admin_name else 'Administrator',
             'avatar': admin_avatar if admin_avatar else '',
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
+            'created_at': get_ist_timestamp(),
+            'updated_at': get_ist_timestamp()
         }
         return db_insert('admin_details', admin_data)
     return None
@@ -589,7 +611,7 @@ def register():
         'qualification': qualification
     }
     session['reg_otp'] = otp
-    session['reg_otp_time'] = datetime.now().isoformat()
+    session['reg_otp_time'] = get_ist_timestamp()
     flash('OTP sent to your email. Please verify to complete registration.', 'info')
     return redirect(url_for('index'))
 
@@ -609,7 +631,7 @@ def verify_register_otp():
     if otp_time:
         try:
             otp_dt = datetime.fromisoformat(otp_time)
-            if (datetime.now() - otp_dt).total_seconds() > 300:
+            if (get_ist_time() - otp_dt).total_seconds() > 300:
                 session.pop('reg_otp', None)
                 session.pop('reg_otp_time', None)
                 session.pop('reg_data', None)
@@ -638,7 +660,7 @@ def verify_register_otp():
         'login_streak': 0,
         'last_login': '',
         'email_verified': 'true',
-        'created_at': datetime.now().isoformat()
+        'created_at': get_ist_timestamp()
     }
     result = db_insert('students', student_data)
     session.pop('reg_otp', None)
@@ -660,7 +682,7 @@ def resend_otp():
         return redirect(url_for('index'))
     otp = generate_otp()
     session['reg_otp'] = otp
-    session['reg_otp_time'] = datetime.now().isoformat()
+    session['reg_otp_time'] = get_ist_timestamp()
     send_otp_email(email, otp, "email verification")
     flash('New OTP sent to your email.', 'info')
     return redirect(url_for('index'))
@@ -712,7 +734,7 @@ def forgot_password():
     otp = generate_otp()
     session['reset_email'] = email
     session['reset_otp'] = otp
-    session['reset_otp_time'] = datetime.now().isoformat()
+    session['reset_otp_time'] = get_ist_timestamp()
     send_otp_email(email, otp, "password reset")
     flash('Password reset OTP sent to your email.', 'info')
     return redirect(url_for('index'))
@@ -866,7 +888,6 @@ def update_profile():
         flash('Failed to update profile.', 'error')
     return redirect(url_for('student_dashboard'))
 
-# FIXED: Student avatar upload using 'avatars' bucket
 @app.route('/student/upload-avatar', methods=['POST'])
 @login_required
 def student_upload_avatar():
@@ -878,10 +899,8 @@ def student_upload_avatar():
             flash('Only image files are allowed (PNG, JPG, JPEG, GIF, WEBP).', 'error')
             return redirect(url_for('student_dashboard'))
         
-        # Upload to Supabase Storage - Using 'avatars' bucket
         avatar_url = upload_file('avatars', avatar_file, avatar_file.filename)
         if avatar_url:
-            # Delete old avatar if exists
             student = db_get_by_id('students', session['user_id'])
             if student:
                 old_avatar = student.get('avatar')
@@ -912,7 +931,7 @@ def demo_dashboard():
         'fullname': 'Demo Student',
         'email': 'demo@slokamtechnology.com',
         'batch': 'Demo Access',
-        'joined_month': datetime.now().strftime('%B %Y'),
+        'joined_month': get_ist_time().strftime('%B %Y'),
         'login_streak': 0,
         'status': 'demo',
         'college_name': '-',
@@ -927,11 +946,9 @@ def demo_dashboard():
     folders = db_get('folders') or []
     all_videos = db_get('videos') or []
     demo_videos = [v for v in all_videos if is_demo_true(v.get('is_demo', False))]
-    print(f"Demo videos found: {len(demo_videos)}")
 
     demo_folder_ids = set(v.get('folder_id', '') for v in demo_videos if v.get('folder_id'))
     demo_folders = [f for f in folders if f.get('id') in demo_folder_ids]
-    print(f"Demo folders found: {len(demo_folders)}")
 
     return render_template('demo.html',
                            student=student,
@@ -1123,7 +1140,6 @@ def admin_edit_student(object_id):
 @app.route('/admin/student/delete/<object_id>')
 @admin_required
 def admin_delete_student(object_id):
-    # Delete student avatar if exists
     student = db_get_by_id('students', object_id)
     if student:
         old_avatar = student.get('avatar')
@@ -1158,7 +1174,6 @@ def reject_student(object_id):
         flash('Invalid student ID.', 'error')
         return redirect(url_for('admin_students'))
     
-    # Delete student avatar if exists before deletion
     student = db_get_by_id('students', object_id)
     if student:
         old_avatar = student.get('avatar')
@@ -1267,8 +1282,8 @@ def add_folder():
         return redirect(url_for('admin_folders'))
     data = {
         'folder_name': folder_name,
-        'folder_date': folder_date if folder_date else datetime.now().strftime('%Y-%m-%d'),
-        'created_at': datetime.now().isoformat()
+        'folder_date': folder_date if folder_date else get_ist_time().strftime('%Y-%m-%d'),
+        'created_at': get_ist_timestamp()
     }
     result = db_insert('folders', data)
     flash('Folder added successfully.' if result else 'Failed to add folder.', 'success' if result else 'error')
@@ -1284,7 +1299,7 @@ def edit_folder(object_id):
         return redirect(url_for('admin_folders'))
     data = {
         'folder_name': folder_name,
-        'folder_date': folder_date if folder_date else datetime.now().strftime('%Y-%m-%d')
+        'folder_date': folder_date if folder_date else get_ist_time().strftime('%Y-%m-%d')
     }
     result = db_update('folders', object_id, data)
     flash('Folder updated successfully.' if result else 'Failed to update folder.', 'success' if result else 'error')
@@ -1356,7 +1371,6 @@ def add_video():
     folder = db_get_by_id('folders', folder_id)
     folder_name = folder.get('folder_name', 'Unknown') if folder else 'Unknown'
     
-    # Upload files to Supabase Storage
     notes_url = notes_link
     if notes_file and notes_file.filename:
         notes_url = upload_file('notes', notes_file, notes_file.filename)
@@ -1373,7 +1387,7 @@ def add_video():
     data = {
         'title': title,
         'youtube_link': youtube_link,
-        'video_date': video_date if video_date else datetime.now().strftime('%Y-%m-%d'),
+        'video_date': video_date if video_date else get_ist_time().strftime('%Y-%m-%d'),
         'folder_id': folder_id,
         'folder_name': folder_name,
         'description': description,
@@ -1381,7 +1395,7 @@ def add_video():
         'exercise_file': exercise_url if exercise_url else '',
         'practice_file': practice_url if practice_url else '',
         'is_demo': is_demo_value,
-        'created_at': datetime.now().isoformat()
+        'created_at': get_ist_timestamp()
     }
     result = db_insert('videos', data)
     flash('Video added successfully.' if result else 'Failed to add video.', 'success' if result else 'error')
@@ -1408,69 +1422,55 @@ def edit_video(object_id):
         return redirect(url_for('admin_videos'))
     
     folder = db_get_by_id('folders', folder_id)
-    
-    # Get existing video to delete old files
     existing_video = db_get_by_id('videos', object_id)
     
     data = {
         'title': title,
         'youtube_link': youtube_link,
-        'video_date': video_date if video_date else datetime.now().strftime('%Y-%m-%d'),
+        'video_date': video_date if video_date else get_ist_time().strftime('%Y-%m-%d'),
         'folder_id': folder_id,
         'folder_name': folder.get('folder_name', 'Unknown') if folder else 'Unknown',
         'description': description,
         'is_demo': 'true' if is_demo in ['true', '1', 'on', 'yes'] else 'false'
     }
     
-    # Handle notes file
     if notes_link:
         data['notes_file'] = notes_link
-        # Delete old file if exists
         if existing_video and existing_video.get('notes_file'):
             delete_storage_file(existing_video.get('notes_file'))
     elif notes_file and notes_file.filename:
-        # Delete old file if exists
         if existing_video and existing_video.get('notes_file'):
             delete_storage_file(existing_video.get('notes_file'))
         notes_url = upload_file('notes', notes_file, notes_file.filename)
         if notes_url:
             data['notes_file'] = notes_url
     elif existing_video and existing_video.get('notes_file') and not notes_link and not notes_file:
-        # Keep existing file
         data['notes_file'] = existing_video.get('notes_file')
     
-    # Handle exercise file
     if exercise_link:
         data['exercise_file'] = exercise_link
-        # Delete old file if exists
         if existing_video and existing_video.get('exercise_file'):
             delete_storage_file(existing_video.get('exercise_file'))
     elif exercise_file and exercise_file.filename:
-        # Delete old file if exists
         if existing_video and existing_video.get('exercise_file'):
             delete_storage_file(existing_video.get('exercise_file'))
         exercise_url = upload_file('exercises', exercise_file, exercise_file.filename)
         if exercise_url:
             data['exercise_file'] = exercise_url
     elif existing_video and existing_video.get('exercise_file') and not exercise_link and not exercise_file:
-        # Keep existing file
         data['exercise_file'] = existing_video.get('exercise_file')
     
-    # Handle practice file
     if practice_link:
         data['practice_file'] = practice_link
-        # Delete old file if exists
         if existing_video and existing_video.get('practice_file'):
             delete_storage_file(existing_video.get('practice_file'))
     elif practice_file and practice_file.filename:
-        # Delete old file if exists
         if existing_video and existing_video.get('practice_file'):
             delete_storage_file(existing_video.get('practice_file'))
         practice_url = upload_file('practice', practice_file, practice_file.filename)
         if practice_url:
             data['practice_file'] = practice_url
     elif existing_video and existing_video.get('practice_file') and not practice_link and not practice_file:
-        # Keep existing file
         data['practice_file'] = existing_video.get('practice_file')
     
     result = db_update('videos', object_id, data)
@@ -1482,7 +1482,6 @@ def edit_video(object_id):
 def delete_video(object_id):
     video = db_get_by_id('videos', object_id)
     if video:
-        # Delete all associated files from Supabase Storage
         for field in ['notes_file', 'exercise_file', 'practice_file']:
             file_url = video.get(field)
             if file_url:
@@ -1556,7 +1555,7 @@ def add_announcement():
         'title': title,
         'message': message,
         'batch': target_batch,
-        'created_at': datetime.now().isoformat(),
+        'created_at': get_ist_timestamp(),
         'admin_name': session.get('admin_name', 'Administrator'),
         'admin_avatar': session.get('admin_avatar', ''),
         'attachment_url': attachment_url,
@@ -1579,21 +1578,17 @@ def edit_announcement(object_id):
     message = request.form.get('message', '').strip()
     target_batch = request.form.get('target_batch', 'all').strip()
     
-    # Get existing announcement
     existing_announcement = db_get_by_id('announcements', object_id)
     
-    # Handle attachment update
     attachment_file = request.files.get('attachment')
     attachment_url = existing_announcement.get('attachment_url', '') if existing_announcement else ''
     attachment_name = existing_announcement.get('attachment_name', '') if existing_announcement else ''
     attachment_type = existing_announcement.get('attachment_type', '') if existing_announcement else ''
     
     if attachment_file and attachment_file.filename:
-        # Delete old attachment if exists
         if existing_announcement and existing_announcement.get('attachment_url'):
             delete_storage_file(existing_announcement.get('attachment_url'))
         
-        # Upload new attachment
         uploaded_url = upload_file('announcements', attachment_file, attachment_file.filename)
         if uploaded_url:
             attachment_url = uploaded_url
@@ -1630,7 +1625,6 @@ def edit_announcement(object_id):
 def delete_announcement(object_id):
     announcement = db_get_by_id('announcements', object_id)
     if announcement and announcement.get('attachment_url'):
-        # Delete attachment from Supabase Storage
         if announcement.get('attachment_url'):
             delete_storage_file(announcement.get('attachment_url'))
     
@@ -1713,10 +1707,8 @@ def admin_upload_avatar():
             flash('Only image files are allowed (PNG, JPG, JPEG, GIF, WEBP).', 'error')
             return redirect(url_for('admin_dashboard'))
         
-        # Upload to Supabase Storage
         avatar_url = upload_file('avatars', avatar_file, avatar_file.filename)
         if avatar_url:
-            # Delete old avatar if exists
             admin_details = get_admin_details(session.get('admin_email', ''))
             if admin_details:
                 old_avatar = admin_details.get('avatar')
