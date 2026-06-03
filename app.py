@@ -1,10 +1,7 @@
 import os
 import random
-import smtplib
 import logging
 import uuid
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import (
@@ -14,6 +11,8 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 load_dotenv()
 
@@ -33,6 +32,13 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ==================== SENDGRID CONFIGURATION ====================
+SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
+FROM_EMAIL = os.getenv('FROM_EMAIL', 'girivennapusa8@gmail.com')
+
+if not SENDGRID_API_KEY:
+    logger.warning("SendGrid API key not configured. Email sending will fallback to console.")
 
 # ==================== ALLOWED FILE EXTENSIONS ====================
 ALLOWED_EXTENSIONS = {
@@ -158,14 +164,138 @@ def get_public_url(bucket_name, filename):
         logger.error(f"Error getting public URL: {e}")
         return None
 
-# ==================== SMTP CONFIGURATION ====================
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
-SMTP_EMAIL = os.getenv('SMTP_EMAIL')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
-
-if not SMTP_EMAIL or not SMTP_PASSWORD:
-    logger.warning("SMTP credentials not configured. Email sending will fail.")
+# ==================== SENDGRID EMAIL HELPER ====================
+def send_otp_email(email, otp, purpose="verification"):
+    """
+    Send OTP email using SendGrid API (works on Render free tier)
+    
+    Args:
+        email: Recipient email address
+        otp: One-time password
+        purpose: Purpose of OTP (verification, password reset)
+    
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    # Check if SendGrid is configured
+    if not SENDGRID_API_KEY:
+        logger.warning(f"SendGrid not configured. OTP for {email}: {otp}")
+        return True
+    
+    try:
+        # Create HTML email content
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{purpose.title()} OTP</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                }}
+                .container {{
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                    border-radius: 10px 10px 0 0;
+                }}
+                .content {{
+                    background: #f9f9f9;
+                    padding: 30px;
+                    border-radius: 0 0 10px 10px;
+                }}
+                .otp-code {{
+                    font-size: 36px;
+                    font-weight: bold;
+                    text-align: center;
+                    letter-spacing: 8px;
+                    color: #667eea;
+                    background: white;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }}
+                .footer {{
+                    text-align: center;
+                    padding: 20px;
+                    font-size: 12px;
+                    color: #999;
+                }}
+                .warning {{
+                    background: #fff3cd;
+                    color: #856404;
+                    padding: 10px;
+                    border-radius: 5px;
+                    font-size: 12px;
+                    text-align: center;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>Slokam Technology</h2>
+                    <p>Empowering Education</p>
+                </div>
+                <div class="content">
+                    <h3>{purpose.title()} Verification</h3>
+                    <p>Hello,</p>
+                    <p>Your OTP for {purpose} is:</p>
+                    <div class="otp-code">
+                        {otp}
+                    </div>
+                    <p>This OTP is valid for <strong>5 minutes</strong>.</p>
+                    <p>If you didn't request this, please ignore this email.</p>
+                    <div class="warning">
+                        ⚠️ Never share this OTP with anyone.
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>&copy; 2026 Slokam Technology. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create message
+        message = Mail(
+            from_email=FROM_EMAIL,
+            to_emails=email,
+            subject=f"Slokam Technology - {purpose.title()} OTP",
+            html_content=html_content
+        )
+        
+        # Send email
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        
+        if response.status_code in [200, 202]:
+            logger.info(f"OTP email sent successfully to {email} via SendGrid")
+            return True
+        else:
+            logger.error(f"SendGrid error: Status code {response.status_code}")
+            logger.info(f"⚠ OTP for {email}: {otp} (use this for testing)")
+            return True
+            
+    except Exception as e:
+        logger.error(f"SendGrid email error for {email}: {str(e)}")
+        logger.info(f"⚠ OTP for {email}: {otp} (use this for testing)")
+        return True
 
 # ==================== SUPABASE DATABASE HELPERS ====================
 def get_db():
@@ -319,37 +449,6 @@ def is_url(value):
 
 def generate_otp():
     return str(random.randint(100000, 999999))
-
-def send_otp_email(email, otp, purpose="verification"):
-    if not SMTP_EMAIL or not SMTP_PASSWORD:
-        logger.warning(f"SMTP not configured. OTP for {email}: {otp}")
-        return True
-    
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = SMTP_EMAIL
-        msg['To'] = email
-        msg['Subject'] = f"Slokam Technology - {purpose.title()} OTP"
-        body = f"""
-        <h2>Slokam Technology</h2>
-        <h3>{purpose.title()} OTP</h3>
-        <p>Your OTP for {purpose} is:</p>
-        <h1>{otp}</h1>
-        <p>This OTP is valid for 5 minutes.</p>
-        <p>If you didn't request this, please ignore.</p>
-        """
-        msg.attach(MIMEText(body, 'html'))
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SMTP_EMAIL, SMTP_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        logger.info(f"OTP email sent to {email}")
-        return True
-    except Exception as e:
-        logger.error(f"Email error: {e}")
-        logger.info(f"⚠ OTP for {email}: {otp} (use this for testing)")
-        return True
 
 app.jinja_env.globals['format_date'] = format_date
 app.jinja_env.globals['format_time_ago'] = format_time_ago
