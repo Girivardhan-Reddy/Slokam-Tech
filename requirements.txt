@@ -3,4 +3,4 @@ werkzeug
 python-dotenv
 supabase
 httpx
-sendgrid
+resend
