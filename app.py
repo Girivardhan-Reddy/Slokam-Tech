@@ -159,11 +159,10 @@ def get_public_url(bucket_name, filename):
         return None
 
 # ==================== SMTP CONFIGURATION ====================
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
-SMTP_EMAIL = os.getenv('SMTP_EMAIL')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
-
+server = smtplib.SMTP_SSL(SMTP_SERVER, 465)
+server.login(SMTP_EMAIL, SMTP_PASSWORD)
+server.send_message(msg)
+server.quit()
 if not SMTP_EMAIL or not SMTP_PASSWORD:
     logger.warning("SMTP credentials not configured. Email sending will fail.")
 
@@ -324,12 +323,13 @@ def send_otp_email(email, otp, purpose="verification"):
     if not SMTP_EMAIL or not SMTP_PASSWORD:
         logger.warning(f"SMTP not configured. OTP for {email}: {otp}")
         return True
-    
+
     try:
         msg = MIMEMultipart()
         msg['From'] = SMTP_EMAIL
         msg['To'] = email
         msg['Subject'] = f"Slokam Technology - {purpose.title()} OTP"
+
         body = f"""
         <h2>Slokam Technology</h2>
         <h3>{purpose.title()} OTP</h3>
@@ -338,19 +338,22 @@ def send_otp_email(email, otp, purpose="verification"):
         <p>This OTP is valid for 5 minutes.</p>
         <p>If you didn't request this, please ignore.</p>
         """
+
         msg.attach(MIMEText(body, 'html'))
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
+
+        # SMTP SSL (Port 465)
+        server = smtplib.SMTP_SSL(SMTP_SERVER, 465)
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         server.send_message(msg)
         server.quit()
+
         logger.info(f"OTP email sent to {email}")
         return True
+
     except Exception as e:
         logger.error(f"Email error: {e}")
         logger.info(f"⚠ OTP for {email}: {otp} (use this for testing)")
-        return True
-
+        return False
 app.jinja_env.globals['format_date'] = format_date
 app.jinja_env.globals['format_time_ago'] = format_time_ago
 app.jinja_env.globals['is_demo_true'] = is_demo_true
