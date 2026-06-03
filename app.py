@@ -11,7 +11,6 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from supabase import create_client, Client
-import resend
 
 load_dotenv()
 
@@ -31,16 +30,6 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ==================== RESEND CONFIGURATION ====================
-RESEND_API_KEY = os.getenv('RESEND_API_KEY')
-FROM_EMAIL = os.getenv('FROM_EMAIL', 'onboarding@resend.dev')
-
-if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
-    logger.info("Resend email service configured")
-else:
-    logger.warning("RESEND_API_KEY not configured. Email sending will fallback to console.")
 
 # ==================== ALLOWED FILE EXTENSIONS ====================
 ALLOWED_EXTENSIONS = {
@@ -173,129 +162,6 @@ def get_public_url(bucket_name, filename):
     except Exception as e:
         logger.error(f"Error getting public URL: {e}")
         return None
-
-# ==================== RESEND EMAIL HELPER ====================
-def send_otp_email(email, otp, purpose="verification"):
-    """
-    Send OTP email using Resend API (works on Render free tier)
-    
-    Args:
-        email: Recipient email address
-        otp: One-time password
-        purpose: Purpose of OTP (verification, password reset)
-    
-    Returns:
-        True if email sent successfully, False otherwise
-    """
-    if not RESEND_API_KEY:
-        logger.warning(f"Resend not configured. OTP for {email}: {otp}")
-        return True
-    
-    try:
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{purpose.title()} OTP</title>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    margin: 0;
-                    padding: 0;
-                }}
-                .container {{
-                    max-width: 600px;
-                    margin: 0 auto;
-                    padding: 20px;
-                }}
-                .header {{
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 30px;
-                    text-align: center;
-                    border-radius: 10px 10px 0 0;
-                }}
-                .content {{
-                    background: #f9f9f9;
-                    padding: 30px;
-                    border-radius: 0 0 10px 10px;
-                }}
-                .otp-code {{
-                    font-size: 36px;
-                    font-weight: bold;
-                    text-align: center;
-                    letter-spacing: 8px;
-                    color: #667eea;
-                    background: white;
-                    padding: 20px;
-                    margin: 20px 0;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }}
-                .footer {{
-                    text-align: center;
-                    padding: 20px;
-                    font-size: 12px;
-                    color: #999;
-                }}
-                .warning {{
-                    background: #fff3cd;
-                    color: #856404;
-                    padding: 10px;
-                    border-radius: 5px;
-                    font-size: 12px;
-                    text-align: center;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h2>Slokam Technology</h2>
-                    <p>Empowering Education</p>
-                </div>
-                <div class="content">
-                    <h3>{purpose.title()} Verification</h3>
-                    <p>Hello,</p>
-                    <p>Your OTP for {purpose} is:</p>
-                    <div class="otp-code">
-                        {otp}
-                    </div>
-                    <p>This OTP is valid for <strong>5 minutes</strong>.</p>
-                    <p>If you didn't request this, please ignore this email.</p>
-                    <div class="warning">
-                        ⚠️ Never share this OTP with anyone.
-                    </div>
-                </div>
-                <div class="footer">
-                    <p>&copy; 2026 Slokam Technology. All rights reserved.</p>
-                    <p>This is an automated message, please do not reply.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        params = {
-            "from": FROM_EMAIL,
-            "to": [email],
-            "subject": f"Slokam Technology - {purpose.title()} OTP",
-            "html": html_content,
-        }
-        
-        response = resend.Emails.send(params)
-        
-        logger.info(f"OTP email sent successfully to {email} via Resend. ID: {response}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Resend email error for {email}: {str(e)}")
-        logger.info(f"⚠ OTP for {email}: {otp} (use this for testing)")
-        return True
 
 # ==================== SUPABASE DATABASE HELPERS ====================
 def get_db():
@@ -457,9 +323,6 @@ def is_url(value):
         return False
     return str(value).startswith('http://') or str(value).startswith('https://')
 
-def generate_otp():
-    return str(random.randint(100000, 999999))
-
 # Register Jinja2 filters
 app.jinja_env.globals['format_date'] = format_date
 app.jinja_env.globals['format_time_ago'] = format_time_ago
@@ -560,7 +423,7 @@ def admin_required(f):
 def index():
     return render_template('base.html')
 
-# ==================== REGISTRATION FLOW ====================
+# ==================== REGISTRATION FLOW (No OTP) ====================
 @app.route('/register', methods=['POST'])
 def register():
     fullname = request.form.get('fullname', '').strip()
@@ -589,11 +452,11 @@ def register():
         flash('Email already registered.', 'error')
         return redirect(url_for('index'))
 
-    otp = generate_otp()
-    send_otp_email(email, otp, "email verification")
     joined_month = joined_month_input if joined_month_input else get_joined_month()
-
-    session['reg_data'] = {
+    batch = get_batch_from_joined_month(joined_month)
+    
+    student_data = {
+        'student_id': generate_student_id(),
         'fullname': fullname,
         'email': email,
         'password': generate_password_hash(password),
@@ -602,53 +465,7 @@ def register():
         'college_name': college_name,
         'mobile_number': mobile_number,
         'parent_mobile': parent_mobile,
-        'qualification': qualification
-    }
-    session['reg_otp'] = otp
-    session['reg_otp_time'] = get_ist_timestamp()
-    flash('OTP sent to your email. Please verify to complete registration.', 'info')
-    return redirect(url_for('index'))
-
-@app.route('/verify-register-otp', methods=['POST'])
-def verify_register_otp():
-    user_otp = request.form.get('otp', '').strip()
-    stored_otp = session.get('reg_otp', '')
-    otp_time = session.get('reg_otp_time', '')
-    reg_data = session.get('reg_data', {})
-
-    if not user_otp:
-        flash('Please enter OTP.', 'error')
-        return redirect(url_for('index'))
-    if not stored_otp or not reg_data:
-        flash('Session expired. Please register again.', 'error')
-        return redirect(url_for('index'))
-    if otp_time:
-        try:
-            otp_dt = datetime.fromisoformat(otp_time)
-            if (get_ist_time() - otp_dt).total_seconds() > 300:
-                session.pop('reg_otp', None)
-                session.pop('reg_otp_time', None)
-                session.pop('reg_data', None)
-                flash('OTP expired. Please register again.', 'error')
-                return redirect(url_for('index'))
-        except:
-            pass
-    if user_otp != stored_otp:
-        flash('Invalid OTP. Please try again.', 'error')
-        return redirect(url_for('index'))
-
-    batch = get_batch_from_joined_month(reg_data.get('joined_month', get_joined_month()))
-    student_data = {
-        'student_id': generate_student_id(),
-        'fullname': reg_data['fullname'],
-        'email': reg_data['email'],
-        'password': reg_data['password'],
-        'passed_out_year': reg_data.get('passed_out_year', ''),
-        'joined_month': reg_data.get('joined_month', ''),
-        'college_name': reg_data.get('college_name', ''),
-        'mobile_number': reg_data.get('mobile_number', ''),
-        'parent_mobile': reg_data.get('parent_mobile', ''),
-        'qualification': reg_data.get('qualification', ''),
+        'qualification': qualification,
         'batch': batch,
         'status': 'pending',
         'login_streak': 0,
@@ -657,28 +474,12 @@ def verify_register_otp():
         'created_at': get_ist_timestamp()
     }
     result = db_insert('students', student_data)
-    session.pop('reg_otp', None)
-    session.pop('reg_otp_time', None)
-    session.pop('reg_data', None)
+    
     if result:
         log_student_activity(result.get('id', ''), 'registered', 'Account created, pending approval')
         flash('Registration successful! Your account is pending admin approval.', 'success')
     else:
         flash('Registration failed. Please try again.', 'error')
-    return redirect(url_for('index'))
-
-@app.route('/resend-otp')
-def resend_otp():
-    reg_data = session.get('reg_data', {})
-    email = reg_data.get('email', '')
-    if not email:
-        flash('No registration in progress.', 'error')
-        return redirect(url_for('index'))
-    otp = generate_otp()
-    session['reg_otp'] = otp
-    session['reg_otp_time'] = get_ist_timestamp()
-    send_otp_email(email, otp, "email verification")
-    flash('New OTP sent to your email.', 'info')
     return redirect(url_for('index'))
 
 # ==================== LOGIN ====================
@@ -714,7 +515,7 @@ def login():
     flash('Login successful!', 'success')
     return redirect(url_for('student_dashboard'))
 
-# ==================== PASSWORD MANAGEMENT ====================
+# ==================== PASSWORD RESET (No OTP) ====================
 @app.route('/forgot-password', methods=['POST'])
 def forgot_password():
     email = request.form.get('email', '').strip().lower()
@@ -725,40 +526,38 @@ def forgot_password():
     if not students:
         flash('No account found with this email.', 'error')
         return redirect(url_for('index'))
-    otp = generate_otp()
+    
+    # Store email in session for password reset
     session['reset_email'] = email
-    session['reset_otp'] = otp
-    session['reset_otp_time'] = get_ist_timestamp()
-    send_otp_email(email, otp, "password reset")
-    flash('Password reset OTP sent to your email.', 'info')
+    flash('Please enter your new password below.', 'info')
     return redirect(url_for('index'))
 
-@app.route('/verify-reset-otp', methods=['POST'])
-def verify_reset_otp():
-    user_otp = request.form.get('otp', '').strip()
+@app.route('/reset-password', methods=['POST'])
+def reset_password():
     new_password = request.form.get('new_password', '').strip()
-    stored_otp = session.get('reset_otp', '')
     email = session.get('reset_email', '')
-    if not user_otp or not new_password:
-        flash('OTP and new password required.', 'error')
-        return redirect(url_for('index'))
-    if user_otp != stored_otp:
-        flash('Invalid OTP.', 'error')
+    
+    if not new_password:
+        flash('New password required.', 'error')
         return redirect(url_for('index'))
     if len(new_password) < 6:
         flash('Password must be at least 6 characters.', 'error')
         return redirect(url_for('index'))
+    if not email:
+        flash('Session expired. Please try again.', 'error')
+        return redirect(url_for('index'))
+    
     students = db_get('students', {'email': email})
     if not students:
         flash('Account not found.', 'error')
         return redirect(url_for('index'))
+    
     hashed = generate_password_hash(new_password)
     result = db_update('students', students[0]['id'], {'password': hashed})
-    session.pop('reset_otp', None)
     session.pop('reset_email', None)
-    session.pop('reset_otp_time', None)
+    
     flash(
-        'Password reset successfully! Please login.' if result else 'Failed.',
+        'Password reset successfully! Please login.' if result else 'Failed to reset password.',
         'success' if result else 'error'
     )
     return redirect(url_for('index'))
