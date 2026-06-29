@@ -638,6 +638,76 @@
             gap: 20px;
         }
 
+        .video-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .video-control {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius);
+            color: var(--white);
+            min-height: 38px;
+            font: 12px var(--font-sans);
+            outline: none;
+        }
+
+        .video-search {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 12px;
+            min-width: 240px;
+        }
+
+        .video-search i {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .video-search input {
+            background: none;
+            border: none;
+            color: var(--white);
+            outline: none;
+            width: 210px;
+            font: 12px var(--font-sans);
+        }
+
+        .video-search input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .video-toolbar select {
+            padding: 0 12px;
+            min-width: 140px;
+        }
+
+        .video-toolbar option {
+            background: var(--bg-card);
+            color: var(--white);
+        }
+
+        .video-result-count {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-left: auto;
+        }
+
+        .video-empty-filter {
+            display: none;
+            text-align: center;
+            padding: 34px 20px;
+            border: 1px dashed var(--border-medium);
+            border-radius: var(--radius-lg);
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
         .video-card {
             background: var(--bg-card);
             border: 1px solid var(--border-medium);
@@ -1833,7 +1903,7 @@
         <div class="section-content" id="section-folder-videos">
             <div class="section-card">
                 <div class="section-header"><span><i class="fas fa-folder"></i> <span id="folderVideoTitle">Folder Videos</span></span><button class="btn btn-outline btn-sm" onclick="switchSection('folders')"><i class="fas fa-arrow-left"></i> Back</button></div>
-                <div class="section-body" id="folderVideoList"><div class="empty-state"><p>Select a folder.</p></div></div>
+                <div class="section-body"><div id="folderVideoControls"></div><div id="folderVideoList"><div class="empty-state"><p>Select a folder.</p></div></div></div>
             </div>
         </div>
 
@@ -1843,9 +1913,16 @@
                 <div class="section-header"><span><i class="fas fa-video"></i> All Course Videos</span></div>
                 <div class="section-body">
                     {% if videos and videos|length > 0 %}
-                        <div class="video-grid">
+                        <div class="video-toolbar" data-video-controls="user-all" data-target-grid="allVideosGrid">
+                            <div class="video-control video-search"><i class="fas fa-search"></i><input type="text" data-video-search placeholder="Search videos..."></div>
+                            <select class="video-control" data-video-folder><option value="">All folders</option>{% for f in folders %}<option value="{{ f.folder_name }}">{{ f.folder_name }}</option>{% endfor %}</select>
+                            <select class="video-control" data-video-resource><option value="">All resources</option><option value="notes">With notes</option><option value="exercise">With exercise</option><option value="practice">With practice</option><option value="demo">Demo only</option></select>
+                            <select class="video-control" data-video-sort><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A-Z</option><option value="folder">Folder A-Z</option></select>
+                            <span class="video-result-count" data-video-count></span>
+                        </div>
+                        <div class="video-grid" id="allVideosGrid">
                             {% for v in videos %}
-                                <div class="video-card" onclick='openVideoPlayer("{{ v.youtube_link }}","{{ v.title|e }}","{{ v.folder_name|e }}","{{ v.description|default('')|e }}","{{ v.notes_file|default('') }}","{{ v.exercise_file|default('') }}","{{ v.practice_file|default('') }}","{{ v.id }}")'>
+                                <div class="video-card" data-title="{{ v.title|e }}" data-folder="{{ v.folder_name|e }}" data-date="{{ v.video_date|default('') }}" data-notes="{{ 'true' if v.notes_file else 'false' }}" data-exercise="{{ 'true' if v.exercise_file else 'false' }}" data-practice="{{ 'true' if v.practice_file else 'false' }}" data-demo="{{ v.is_demo|default('false') }}" onclick='openVideoPlayer("{{ v.youtube_link }}","{{ v.title|e }}","{{ v.folder_name|e }}","{{ v.description|default('')|e }}","{{ v.notes_file|default('') }}","{{ v.exercise_file|default('') }}","{{ v.practice_file|default('') }}","{{ v.id }}")'>
                                     <div class="video-thumb">
                                         {% set yt_link = v.youtube_link or '' %}
                                         {% if yt_link %}
@@ -1880,6 +1957,7 @@
                                 </div>
                             {% endfor %}
                         </div>
+                        <div class="video-empty-filter" data-video-empty="allVideosGrid"><i class="fas fa-filter"></i> No videos match the selected options.</div>
                     {% else %}
                         <div class="empty-state"><div class="empty-icon"><i class="fas fa-video"></i></div><p>No videos available.</p></div>
                     {% endif %}
@@ -2149,6 +2227,68 @@ let filteredPlaylist = [];
 // Store all videos
 allVideos = {% if videos %}{{ videos|tojson|safe }}{% else %}[]{% endif %};
 
+function videoCardHtml(v) {
+    const ytId = getYouTubeId(v.youtube_link || '');
+    const thumbHtml = ytId ? `<iframe src="https://www.youtube.com/embed/${ytId}?controls=0&modestbranding=1"></iframe><div class="play-overlay"><i class="fas fa-play-circle"></i></div>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)"><i class="fas fa-play"></i></div>';
+    return `<div class="video-card" data-title="${escapeHtml(v.title)}" data-folder="${escapeHtml(v.folder_name || '')}" data-date="${v.video_date || ''}" data-notes="${v.notes_file ? 'true' : 'false'}" data-exercise="${v.exercise_file ? 'true' : 'false'}" data-practice="${v.practice_file ? 'true' : 'false'}" data-demo="${v.is_demo || 'false'}" onclick='openVideoPlayer("${escapeHtml(v.youtube_link)}","${escapeHtml(v.title)}","${escapeHtml(v.folder_name)}","${escapeHtml(v.description||'')}","${escapeHtml(v.notes_file||'')}","${escapeHtml(v.exercise_file||'')}","${escapeHtml(v.practice_file||'')}","${v.id || ''}")'>
+        <div class="video-thumb">${thumbHtml}${v.is_demo === 'true' ? '<span class="demo-badge"><i class="fas fa-play-circle"></i> Demo</span>' : ''}</div>
+        <div class="video-info">
+            <h4>${escapeHtml(v.title)}</h4>
+            <div class="video-meta"><span><i class="fas fa-folder"></i> ${escapeHtml(v.folder_name)}</span></div>
+            <div class="video-date"><i class="fas fa-calendar-alt"></i> ${v.video_date || 'No date'}</div>
+            <div class="video-resources">${v.notes_file ? `<a href="${escapeHtml(v.notes_file)}" target="_blank" class="resource-link notes" onclick="event.stopPropagation()"><i class="fas fa-file-alt"></i> Notes</a>` : ''}${v.exercise_file ? `<a href="${escapeHtml(v.exercise_file)}" target="_blank" class="resource-link exercise" onclick="event.stopPropagation()"><i class="fas fa-tasks"></i> Exercise</a>` : ''}${v.practice_file ? `<a href="${escapeHtml(v.practice_file)}" target="_blank" class="resource-link practice" onclick="event.stopPropagation()"><i class="fas fa-code"></i> Practice</a>` : ''}</div>
+        </div>
+    </div>`;
+}
+
+function createVideoToolbar(scope, gridId, folders) {
+    const options = folders.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+    return `<div class="video-toolbar" data-video-controls="${scope}" data-target-grid="${gridId}"><div class="video-control video-search"><i class="fas fa-search"></i><input type="text" data-video-search placeholder="Search videos..."></div><select class="video-control" data-video-folder><option value="">All folders</option>${options}</select><select class="video-control" data-video-resource><option value="">All resources</option><option value="notes">With notes</option><option value="exercise">With exercise</option><option value="practice">With practice</option><option value="demo">Demo only</option></select><select class="video-control" data-video-sort><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A-Z</option><option value="folder">Folder A-Z</option></select><span class="video-result-count" data-video-count></span></div>`;
+}
+
+function initVideoControls(scope) {
+    const controls = document.querySelector(`[data-video-controls="${scope}"]`);
+    if (!controls) return;
+    controls.querySelectorAll('input,select').forEach(el => {
+        el.addEventListener('input', applyVideoControls);
+        el.addEventListener('change', applyVideoControls);
+    });
+    applyVideoControls({ currentTarget: controls });
+}
+
+function applyVideoControls(event) {
+    const controls = event.currentTarget?.closest?.('[data-video-controls]') || event.currentTarget || event.target.closest('[data-video-controls]');
+    if (!controls) return;
+    const grid = document.getElementById(controls.dataset.targetGrid);
+    if (!grid) return;
+    const search = (controls.querySelector('[data-video-search]')?.value || '').toLowerCase();
+    const folder = controls.querySelector('[data-video-folder]')?.value || '';
+    const resource = controls.querySelector('[data-video-resource]')?.value || '';
+    const sort = controls.querySelector('[data-video-sort]')?.value || 'newest';
+    const cards = Array.from(grid.querySelectorAll('.video-card'));
+    cards.sort((a, b) => {
+        if (sort === 'title') return (a.dataset.title || '').localeCompare(b.dataset.title || '');
+        if (sort === 'folder') return (a.dataset.folder || '').localeCompare(b.dataset.folder || '') || (a.dataset.title || '').localeCompare(b.dataset.title || '');
+        const ad = Date.parse(a.dataset.date || '') || 0;
+        const bd = Date.parse(b.dataset.date || '') || 0;
+        return sort === 'oldest' ? ad - bd : bd - ad;
+    }).forEach(card => grid.appendChild(card));
+    let visible = 0;
+    cards.forEach(card => {
+        const text = `${card.dataset.title || ''} ${card.dataset.folder || ''} ${card.textContent || ''}`.toLowerCase();
+        let show = !search || text.includes(search);
+        if (folder && card.dataset.folder !== folder) show = false;
+        if (resource && resource !== 'demo' && card.dataset[resource] !== 'true') show = false;
+        if (resource === 'demo' && card.dataset.demo !== 'true') show = false;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    const count = controls.querySelector('[data-video-count]');
+    if (count) count.textContent = `${visible} of ${cards.length} videos`;
+    const empty = document.querySelector(`[data-video-empty="${controls.dataset.targetGrid}"]`);
+    if (empty) empty.style.display = visible === 0 ? 'block' : 'none';
+}
+
 // Tab switching
 function switchSection(section) {
     document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
@@ -2229,19 +2369,12 @@ function openFolderVideos(folderId, folderName) {
     document.getElementById('folderVideoTitle').innerHTML = `${folderName} <span style="background:rgba(99,102,241,0.15); padding:4px 12px; border-radius:20px; font-size:11px; margin-left:10px;"><i class="fas fa-video"></i> ${allVideos.filter(v => v.folder_id === folderId).length} Videos</span>`;
     const videoList = document.getElementById('folderVideoList');
     const folderVideos = allVideos.filter(v => v.folder_id === folderId);
+    const folderNames = [...new Set(folderVideos.map(v => v.folder_name).filter(Boolean))];
+    document.getElementById('folderVideoControls').innerHTML = folderVideos.length ? createVideoToolbar('user-folder', 'folderVideosGrid', folderNames) : '';
     
     if (folderVideos.length > 0) {
-        videoList.innerHTML = `<div class="video-grid">${folderVideos.map(v => `
-            <div class="video-card" onclick='openVideoPlayer("${escapeHtml(v.youtube_link)}","${escapeHtml(v.title)}","${escapeHtml(v.folder_name)}","${escapeHtml(v.description||'')}","${escapeHtml(v.notes_file||'')}","${escapeHtml(v.exercise_file||'')}","${escapeHtml(v.practice_file||'')}","${v.id}")'>
-                <div class="video-thumb">${(function(){const ytId = getYouTubeId(v.youtube_link || ''); return ytId ? `<iframe src="https://www.youtube.com/embed/${ytId}?controls=0&modestbranding=1"></iframe><div class="play-overlay"><i class="fas fa-play-circle"></i></div>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)"><i class="fas fa-play"></i></div>';})()}</div>
-                <div class="video-info">
-                    <h4>${escapeHtml(v.title)}</h4>
-                    <div class="video-meta"><span><i class="fas fa-folder"></i> ${escapeHtml(v.folder_name)}</span></div>
-                    <div class="video-date"><i class="fas fa-calendar-alt"></i> ${v.video_date || 'No date'}</div>
-                    <div class="video-resources">${v.notes_file ? `<a href="${escapeHtml(v.notes_file)}" target="_blank" class="resource-link notes" onclick="event.stopPropagation()"><i class="fas fa-file-alt"></i> Notes</a>` : ''}${v.exercise_file ? `<a href="${escapeHtml(v.exercise_file)}" target="_blank" class="resource-link exercise" onclick="event.stopPropagation()"><i class="fas fa-tasks"></i> Exercise</a>` : ''}${v.practice_file ? `<a href="${escapeHtml(v.practice_file)}" target="_blank" class="resource-link practice" onclick="event.stopPropagation()"><i class="fas fa-code"></i> Practice</a>` : ''}</div>
-                </div>
-            </div>
-        `).join('')}</div>`;
+        videoList.innerHTML = `<div class="video-grid" id="folderVideosGrid">${folderVideos.map(v => videoCardHtml(v)).join('')}</div><div class="video-empty-filter" data-video-empty="folderVideosGrid"><i class="fas fa-filter"></i> No videos match the selected options.</div>`;
+        initVideoControls('user-folder');
     } else {
         videoList.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fas fa-video"></i></div><p>No videos in this folder.</p></div>';
     }
@@ -2361,6 +2494,7 @@ document.addEventListener('keydown', function(e) {
 
 // Auto-hide flash messages
 document.addEventListener('DOMContentLoaded', function() {
+    initVideoControls('user-all');
     document.querySelectorAll('.flash-message').forEach(m => {
         setTimeout(() => {
             m.style.opacity = '0';
