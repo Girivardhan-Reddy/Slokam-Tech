@@ -340,6 +340,17 @@ app.jinja_env.globals['is_url'] = is_url
 def get_joined_month():
     return get_ist_time().strftime("%B %Y")
 
+def normalize_joined_month(value):
+    if not value:
+        return ''
+    value = value.strip()
+    try:
+        if len(value) == 7 and value[4] == '-':
+            return datetime.strptime(value, '%Y-%m').strftime('%B %Y')
+    except ValueError:
+        pass
+    return value
+
 def update_login_streak(student):
     student_id = student['id']
     now = get_ist_time().strftime('%Y-%m-%d')
@@ -433,7 +444,7 @@ def register():
     password = request.form.get('password', '').strip()
     confirm_password = request.form.get('confirm_password', '').strip()
     passed_out_year = request.form.get('passed_out_year', '').strip()
-    joined_month_input = request.form.get('joined_month', '').strip()
+    joined_month_input = normalize_joined_month(request.form.get('joined_month', '').strip())
     college_name = request.form.get('college_name', '').strip()
     mobile_number = request.form.get('mobile_number', '').strip()
     parent_mobile = request.form.get('parent_mobile', '').strip()
